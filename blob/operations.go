@@ -178,6 +178,9 @@ func (c *Client) applyLifecycleRules(ctx context.Context, bucketName string) err
 			{
 				ID:     "CleanDeleteMarkers",
 				Status: "Enabled",
+				Expiration: lifecycle.Expiration{
+					DeleteMarker: lifecycle.ExpireDeleteMarker(true),
+				},
 				DelMarkerExpiration: lifecycle.DelMarkerExpiration{
 					Days: deleteMarkerDays,
 				},
