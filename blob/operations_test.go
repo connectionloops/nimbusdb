@@ -1,9 +1,21 @@
 package blob
 
 import (
+	"NimbusDb/configurations"
 	"context"
+	"strings"
 	"testing"
 )
+
+// getTestConfig returns a test configuration with lifecycle settings.
+func getTestConfig() *configurations.Config {
+	return &configurations.Config{
+		Blob: configurations.BlobConfig{
+			DeleteMarkerCleanupDelayDays:      1,
+			NonCurrentVersionCleanupDelayDays: 1,
+		},
+	}
+}
 
 // setupMockClient creates a test client with a mock MinIO implementation.
 func setupMockClient(t *testing.T) (*Client, string) {
@@ -13,7 +25,7 @@ func setupMockClient(t *testing.T) (*Client, string) {
 	// Pre-create the bucket for testing
 	mockClient.createBucketForTesting(bucketName)
 
-	client := NewClientWithInterface(mockClient)
+	client := NewClientWithInterface(mockClient, getTestConfig())
 	return client, bucketName
 }
 
@@ -25,13 +37,16 @@ func TestClient_ReadFile_Success(t *testing.T) {
 	testData := []byte("Hello, World! This is test data.")
 
 	// First write a file
-	err := client.WriteFile(ctx, bucketName, testFileName, testData)
+	versionID, err := client.WriteFile(ctx, bucketName, testFileName, testData)
 	if err != nil {
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
+	if versionID == "" {
+		t.Error("WriteFile() should return a version ID")
+	}
 
-	// Read the file
-	readData, err := client.ReadFile(ctx, bucketName, testFileName)
+	// Read the file (latest version)
+	readData, err := client.ReadFile(ctx, bucketName, testFileName, "")
 	if err != nil {
 		t.Fatalf("ReadFile() failed: %v", err)
 	}
@@ -46,7 +61,7 @@ func TestClient_ReadFile_EmptyFileName(t *testing.T) {
 	client, bucketName := setupMockClient(t)
 
 	ctx := context.Background()
-	_, err := client.ReadFile(ctx, bucketName, "")
+	_, err := client.ReadFile(ctx, bucketName, "", "")
 	if err == nil {
 		t.Error("ReadFile() should have failed with empty file name")
 	}
@@ -56,7 +71,7 @@ func TestClient_ReadFile_EmptyBucketName(t *testing.T) {
 	client, _ := setupMockClient(t)
 
 	ctx := context.Background()
-	_, err := client.ReadFile(ctx, "", "test.txt")
+	_, err := client.ReadFile(ctx, "", "test.txt", "")
 	if err == nil {
 		t.Error("ReadFile() should have failed with empty bucket name")
 	}
@@ -66,7 +81,7 @@ func TestClient_ReadFile_NonExistentFile(t *testing.T) {
 	client, bucketName := setupMockClient(t)
 
 	ctx := context.Background()
-	_, err := client.ReadFile(ctx, bucketName, "non-existent-file.txt")
+	_, err := client.ReadFile(ctx, bucketName, "non-existent-file.txt", "")
 	if err == nil {
 		t.Error("ReadFile() should have failed with non-existent file")
 	}
@@ -79,13 +94,16 @@ func TestClient_WriteFile_Success(t *testing.T) {
 	testFileName := "test-write-file.txt"
 	testData := []byte("This is test data for writing.")
 
-	err := client.WriteFile(ctx, bucketName, testFileName, testData)
+	versionID, err := client.WriteFile(ctx, bucketName, testFileName, testData)
 	if err != nil {
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
+	if versionID == "" {
+		t.Error("WriteFile() should return a version ID")
+	}
 
-	// Verify by reading back
-	readData, err := client.ReadFile(ctx, bucketName, testFileName)
+	// Verify by reading back (latest version)
+	readData, err := client.ReadFile(ctx, bucketName, testFileName, "")
 	if err != nil {
 		t.Fatalf("ReadFile() failed after WriteFile: %v", err)
 	}
@@ -99,7 +117,7 @@ func TestClient_WriteFile_EmptyFileName(t *testing.T) {
 	client, bucketName := setupMockClient(t)
 
 	ctx := context.Background()
-	err := client.WriteFile(ctx, bucketName, "", []byte("test"))
+	_, err := client.WriteFile(ctx, bucketName, "", []byte("test"))
 	if err == nil {
 		t.Error("WriteFile() should have failed with empty file name")
 	}
@@ -109,7 +127,7 @@ func TestClient_WriteFile_EmptyBucketName(t *testing.T) {
 	client, _ := setupMockClient(t)
 
 	ctx := context.Background()
-	err := client.WriteFile(ctx, "", "test.txt", []byte("test"))
+	_, err := client.WriteFile(ctx, "", "test.txt", []byte("test"))
 	if err == nil {
 		t.Error("WriteFile() should have failed with empty bucket name")
 	}
@@ -119,7 +137,7 @@ func TestClient_WriteFile_NilData(t *testing.T) {
 	client, bucketName := setupMockClient(t)
 
 	ctx := context.Background()
-	err := client.WriteFile(ctx, bucketName, "test.txt", nil)
+	_, err := client.WriteFile(ctx, bucketName, "test.txt", nil)
 	if err == nil {
 		t.Error("WriteFile() should have failed with nil data")
 	}
@@ -130,13 +148,16 @@ func TestClient_WriteFile_EmptyData(t *testing.T) {
 
 	ctx := context.Background()
 	testFileName := "test-empty-file.txt"
-	err := client.WriteFile(ctx, bucketName, testFileName, []byte{})
+	versionID, err := client.WriteFile(ctx, bucketName, testFileName, []byte{})
 	if err != nil {
 		t.Fatalf("WriteFile() should succeed with empty data, got: %v", err)
 	}
+	if versionID == "" {
+		t.Error("WriteFile() should return a version ID")
+	}
 
-	// Verify by reading back
-	readData, err := client.ReadFile(ctx, bucketName, testFileName)
+	// Verify by reading back (latest version)
+	readData, err := client.ReadFile(ctx, bucketName, testFileName, "")
 	if err != nil {
 		t.Fatalf("ReadFile() failed after WriteFile: %v", err)
 	}
@@ -154,13 +175,16 @@ func TestClient_WriteFile_ReadFile_RoundTrip(t *testing.T) {
 	testData := []byte("Round trip test data with special chars: !@#$%^&*()")
 
 	// Write
-	err := client.WriteFile(ctx, bucketName, testFileName, testData)
+	versionID, err := client.WriteFile(ctx, bucketName, testFileName, testData)
 	if err != nil {
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
+	if versionID == "" {
+		t.Error("WriteFile() should return a version ID")
+	}
 
-	// Read
-	readData, err := client.ReadFile(ctx, bucketName, testFileName)
+	// Read (latest version)
+	readData, err := client.ReadFile(ctx, bucketName, testFileName, "")
 	if err != nil {
 		t.Fatalf("ReadFile() failed: %v", err)
 	}
@@ -257,5 +281,104 @@ func TestClient_CreateBucket_WithVersioning(t *testing.T) {
 	}
 	if versioning.Status != "Enabled" {
 		t.Errorf("Expected versioning status 'Enabled', got '%s'", versioning.Status)
+	}
+}
+
+func TestClient_WriteFile_ReadFile_WithVersionID(t *testing.T) {
+	client, bucketName := setupMockClient(t)
+
+	ctx := context.Background()
+	testFileName := "test-versioned-file.txt"
+
+	// Write first version
+	firstData := []byte("First version of the file")
+	firstVersionID, err := client.WriteFile(ctx, bucketName, testFileName, firstData)
+	if err != nil {
+		t.Fatalf("WriteFile() failed for first version: %v", err)
+	}
+	if firstVersionID == "" {
+		t.Error("WriteFile() should return a version ID for first version")
+	}
+
+	// Write second version
+	secondData := []byte("Second version of the file")
+	secondVersionID, err := client.WriteFile(ctx, bucketName, testFileName, secondData)
+	if err != nil {
+		t.Fatalf("WriteFile() failed for second version: %v", err)
+	}
+	if secondVersionID == "" {
+		t.Error("WriteFile() should return a version ID for second version")
+	}
+	if firstVersionID == secondVersionID {
+		t.Error("Different writes should return different version IDs")
+	}
+
+	// Read latest version (should be second version)
+	latestData, err := client.ReadFile(ctx, bucketName, testFileName, "")
+	if err != nil {
+		t.Fatalf("ReadFile() failed for latest version: %v", err)
+	}
+	if string(latestData) != string(secondData) {
+		t.Errorf("Expected latest version to be second version. Expected: %s, got: %s", string(secondData), string(latestData))
+	}
+
+	// Read first version by version ID
+	firstVersionData, err := client.ReadFile(ctx, bucketName, testFileName, firstVersionID)
+	if err != nil {
+		t.Fatalf("ReadFile() failed for first version: %v", err)
+	}
+	if string(firstVersionData) != string(firstData) {
+		t.Errorf("Expected first version data. Expected: %s, got: %s", string(firstData), string(firstVersionData))
+	}
+
+	// Read second version by version ID
+	secondVersionData, err := client.ReadFile(ctx, bucketName, testFileName, secondVersionID)
+	if err != nil {
+		t.Fatalf("ReadFile() failed for second version: %v", err)
+	}
+	if string(secondVersionData) != string(secondData) {
+		t.Errorf("Expected second version data. Expected: %s, got: %s", string(secondData), string(secondVersionData))
+	}
+}
+
+func TestClient_ReadFile_InvalidVersionID(t *testing.T) {
+	client, bucketName := setupMockClient(t)
+
+	ctx := context.Background()
+	testFileName := "test-file.txt"
+	testData := []byte("Test data")
+
+	// Write a file
+	_, err := client.WriteFile(ctx, bucketName, testFileName, testData)
+	if err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	// Try to read with invalid version ID
+	_, err = client.ReadFile(ctx, bucketName, testFileName, "invalid-version-id")
+	if err == nil {
+		t.Error("ReadFile() should have failed with invalid version ID")
+	}
+}
+
+func TestClient_CreateBucket_NilConfig(t *testing.T) {
+	mockClient := newMockMinioClient()
+	// Create client without config
+	client := NewClientWithInterface(mockClient, nil)
+
+	ctx := context.Background()
+	bucketName := "test-bucket-no-config"
+
+	// CreateBucket should fail when config is nil
+	err := client.CreateBucket(ctx, bucketName)
+	if err == nil {
+		t.Error("CreateBucket() should have failed with nil config")
+		return
+	}
+
+	// Check that the error message contains key parts
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "config is required") || !strings.Contains(errMsg, "lifecycle rules") {
+		t.Errorf("Expected error message about config being required for lifecycle rules, got: %v", err)
 	}
 }

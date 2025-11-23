@@ -10,6 +10,7 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"github.com/rs/zerolog/log"
 )
 
 // buildEnvToKoanfMap builds a map from env var names to koanf keys using struct tags.
@@ -88,11 +89,33 @@ func Load(path string) (*Config, error) {
 	if cfg.HealthPort == 0 {
 		cfg.HealthPort = DefaultHealthPort
 	}
+	if cfg.Blob.DeleteMarkerCleanupDelayDays == 0 {
+		cfg.Blob.DeleteMarkerCleanupDelayDays = DefaultDeleteMarkerCleanupDelayDays
+	}
+	if cfg.Blob.NonCurrentVersionCleanupDelayDays == 0 {
+		cfg.Blob.NonCurrentVersionCleanupDelayDays = DefaultNonCurrentVersionCleanupDelayDays
+	}
 
 	// 5. Validate configuration
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
+
+	// 6. Log configuration
+	log.Info().Msgf(`Configuration loaded:
+		shardCount: %d
+		healthPort: %d
+		blobEndpoint: %s
+		blobUseSSL: %t
+		blobDeleteMarkerCleanupDelayDays: %d
+		blobNonCurrentVersionCleanupDelayDays: %d`,
+		cfg.ShardCount,
+		cfg.HealthPort,
+		cfg.Blob.Endpoint,
+		cfg.Blob.UseSSL,
+		cfg.Blob.DeleteMarkerCleanupDelayDays,
+		cfg.Blob.NonCurrentVersionCleanupDelayDays,
+	)
 
 	return cfg, nil
 }
@@ -103,5 +126,15 @@ func validateConfig(cfg *Config) error {
 	if cfg.HealthPort < 1 || cfg.HealthPort > 65535 {
 		return fmt.Errorf("health port must be between 1 and 65535, got %d", cfg.HealthPort)
 	}
+
+	// Validate lifecycle cleanup delay days (1-365 days, 1 year max)
+	const maxLifecycleDays = 365
+	if cfg.Blob.DeleteMarkerCleanupDelayDays < 1 || cfg.Blob.DeleteMarkerCleanupDelayDays > maxLifecycleDays {
+		return fmt.Errorf("delete marker cleanup delay days must be between 1 and %d, got %d", maxLifecycleDays, cfg.Blob.DeleteMarkerCleanupDelayDays)
+	}
+	if cfg.Blob.NonCurrentVersionCleanupDelayDays < 1 || cfg.Blob.NonCurrentVersionCleanupDelayDays > maxLifecycleDays {
+		return fmt.Errorf("non-current version cleanup delay days must be between 1 and %d, got %d", maxLifecycleDays, cfg.Blob.NonCurrentVersionCleanupDelayDays)
+	}
+
 	return nil
 }

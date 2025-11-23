@@ -5,6 +5,8 @@ import (
 	"NimbusDb/health"
 	"NimbusDb/version"
 	"context"
+	_ "embed"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +14,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+//go:embed banner.txt
+var banner string
+
 func main() {
+	// Print ASCII art banner
+	fmt.Print(banner)
+
 	// Parse command-line arguments
 	args, err := configurations.ParseArguments(os.Args[1:])
 	if err != nil {
@@ -46,12 +54,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
-	log.Info().
-		Uint16("shardCount", cfg.ShardCount).
-		Int("healthPort", cfg.HealthPort).
-		Str("blobEndpoint", cfg.Blob.Endpoint).
-		Bool("blobUseSSL", cfg.Blob.UseSSL).
-		Msg("Configuration loaded")
 	if args.Mode == configurations.ModeSingle {
 		log.Info().Msgf("%s is running in single mode", configurations.AppName)
 	} else if args.Mode == configurations.ModeDistributed {

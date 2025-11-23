@@ -13,6 +13,7 @@ import (
 // Client wraps the MinIO client and provides blob storage operations.
 type Client struct {
 	minioClient minioClientInterface
+	config      *configurations.Config
 }
 
 // NewClient creates a new MinIO client with the provided configuration.
@@ -53,6 +54,7 @@ func NewClient(ctx context.Context, cfg *configurations.Config) (*Client, error)
 
 	return &Client{
 		minioClient: newMinioClientAdapter(minioClient),
+		config:      cfg,
 	}, nil
 }
 
@@ -61,11 +63,13 @@ func NewClient(ctx context.Context, cfg *configurations.Config) (*Client, error)
 //
 // params:
 //   - minioClient: An implementation of minioClientInterface (can be a mock)
+//   - cfg: Optional configuration. If nil, operations requiring config (like CreateBucket) will fail
 //
 // return:
 //   - *Client: A new blob client instance
-func NewClientWithInterface(minioClient minioClientInterface) *Client {
+func NewClientWithInterface(minioClient minioClientInterface, cfg *configurations.Config) *Client {
 	return &Client{
 		minioClient: minioClient,
+		config:      cfg,
 	}
 }

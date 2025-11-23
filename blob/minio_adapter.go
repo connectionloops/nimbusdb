@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 // minioClientAdapter adapts a real minio.Client to implement minioClientInterface.
@@ -60,4 +61,9 @@ func (a *minioClientAdapter) RemoveObject(ctx context.Context, bucketName, objec
 // RemoveBucket removes a bucket.
 func (a *minioClientAdapter) RemoveBucket(ctx context.Context, bucketName string) error {
 	return a.client.RemoveBucket(ctx, bucketName)
+}
+
+// SetBucketLifecycle sets the lifecycle configuration for a bucket.
+func (a *minioClientAdapter) SetBucketLifecycle(ctx context.Context, bucketName string, config *lifecycle.Configuration) error {
+	return a.client.SetBucketLifecycle(ctx, bucketName, config)
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 // minioClientInterface defines the interface for MinIO client operations.
@@ -37,4 +38,7 @@ type minioClientInterface interface {
 
 	// RemoveBucket removes a bucket.
 	RemoveBucket(ctx context.Context, bucketName string) error
+
+	// SetBucketLifecycle sets the lifecycle configuration for a bucket.
+	SetBucketLifecycle(ctx context.Context, bucketName string, config *lifecycle.Configuration) error
 }
