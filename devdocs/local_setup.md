@@ -217,6 +217,16 @@ find . -name "*.go" | entr -c go test ./...
 **Using `air` (with test configuration):**
 Install [air](https://github.com/cosmtrek/air) for a more full-featured testing experience.
 
+## Format with `gofmt`
+
+Run
+
+```bash
+gofmt -l -w .
+```
+
+to auto format code
+
 ## Troubleshooting
 
 WIP

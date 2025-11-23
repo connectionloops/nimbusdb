@@ -6,24 +6,31 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 // mockMinioClient is a mock implementation of minioClientInterface for testing.
 type mockMinioClient struct {
 	mu                  sync.RWMutex
 	buckets             map[string]bool
-	objects             map[string]map[string][]byte // bucket -> object -> data
-	versioning          map[string]bool              // bucket -> versioning enabled
+	objects             map[string]map[string][]byte            // bucket -> object -> latest data
+	objectVersions      map[string]map[string]map[string][]byte // bucket -> object -> versionID -> data
+	latestVersions      map[string]map[string]string            // bucket -> object -> latest versionID
+	versioning          map[string]bool                         // bucket -> versioning enabled
+	versionCounter      atomic.Int64                            // counter for generating version IDs
 	listBucketsErr      error
-	getObjectErr        map[string]error // bucket/object -> error
-	putObjectErr        map[string]error // bucket/object -> error
-	bucketExistsErr     map[string]error // bucket -> error
-	makeBucketErr       map[string]error // bucket -> error
-	enableVersioningErr map[string]error // bucket -> error
-	removeObjectErr     map[string]error // bucket/object -> error
-	removeBucketErr     map[string]error // bucket -> error
+	getObjectErr        map[string]error                    // bucket/object -> error
+	putObjectErr        map[string]error                    // bucket/object -> error
+	bucketExistsErr     map[string]error                    // bucket -> error
+	makeBucketErr       map[string]error                    // bucket -> error
+	enableVersioningErr map[string]error                    // bucket -> error
+	removeObjectErr     map[string]error                    // bucket/object -> error
+	removeBucketErr     map[string]error                    // bucket -> error
+	setLifecycleErr     map[string]error                    // bucket -> error
+	lifecycleConfigs    map[string]*lifecycle.Configuration // bucket -> lifecycle config
 }
 
 // newMockMinioClient creates a new mock MinIO client.
@@ -31,6 +38,8 @@ func newMockMinioClient() *mockMinioClient {
 	return &mockMinioClient{
 		buckets:             make(map[string]bool),
 		objects:             make(map[string]map[string][]byte),
+		objectVersions:      make(map[string]map[string]map[string][]byte),
+		latestVersions:      make(map[string]map[string]string),
 		versioning:          make(map[string]bool),
 		getObjectErr:        make(map[string]error),
 		putObjectErr:        make(map[string]error),
@@ -39,6 +48,8 @@ func newMockMinioClient() *mockMinioClient {
 		enableVersioningErr: make(map[string]error),
 		removeObjectErr:     make(map[string]error),
 		removeBucketErr:     make(map[string]error),
+		setLifecycleErr:     make(map[string]error),
+		lifecycleConfigs:    make(map[string]*lifecycle.Configuration),
 	}
 }
 
@@ -76,9 +87,23 @@ func (m *mockMinioClient) GetObject(ctx context.Context, bucketName, objectName 
 		return nil, fmt.Errorf("bucket %s does not exist", bucketName)
 	}
 
-	data, exists := bucket[objectName]
-	if !exists {
-		return nil, fmt.Errorf("object %s does not exist in bucket %s", objectName, bucketName)
+	var data []byte
+	var found bool
+
+	// If version ID is specified, read that specific version
+	if opts.VersionID != "" {
+		if m.objectVersions[bucketName] != nil && m.objectVersions[bucketName][objectName] != nil {
+			data, found = m.objectVersions[bucketName][objectName][opts.VersionID]
+		}
+		if !found {
+			return nil, fmt.Errorf("version %s does not exist for object %s in bucket %s", opts.VersionID, objectName, bucketName)
+		}
+	} else {
+		// No version specified, read latest version
+		data, found = bucket[objectName]
+		if !found {
+			return nil, fmt.Errorf("object %s does not exist in bucket %s", objectName, bucketName)
+		}
 	}
 
 	// Create a mock object that implements io.ReadCloser
@@ -111,10 +136,32 @@ func (m *mockMinioClient) PutObject(ctx context.Context, bucketName, objectName 
 
 	m.objects[bucketName][objectName] = data
 
+	// Generate version ID if versioning is enabled
+	var versionID string
+	if m.versioning[bucketName] {
+		versionID = fmt.Sprintf("version-%d", m.versionCounter.Add(1))
+
+		// Initialize version tracking structures if needed
+		if m.objectVersions[bucketName] == nil {
+			m.objectVersions[bucketName] = make(map[string]map[string][]byte)
+		}
+		if m.objectVersions[bucketName][objectName] == nil {
+			m.objectVersions[bucketName][objectName] = make(map[string][]byte)
+		}
+		if m.latestVersions[bucketName] == nil {
+			m.latestVersions[bucketName] = make(map[string]string)
+		}
+
+		// Store the versioned data
+		m.objectVersions[bucketName][objectName][versionID] = data
+		m.latestVersions[bucketName][objectName] = versionID
+	}
+
 	return minio.UploadInfo{
-		Bucket: bucketName,
-		Key:    objectName,
-		Size:   int64(len(data)),
+		Bucket:    bucketName,
+		Key:       objectName,
+		Size:      int64(len(data)),
+		VersionID: versionID,
 	}, nil
 }
 
@@ -220,7 +267,27 @@ func (m *mockMinioClient) RemoveBucket(ctx context.Context, bucketName string) e
 	delete(m.buckets, bucketName)
 	delete(m.objects, bucketName)
 	delete(m.versioning, bucketName)
+	delete(m.lifecycleConfigs, bucketName)
+	delete(m.objectVersions, bucketName)
+	delete(m.latestVersions, bucketName)
 
+	return nil
+}
+
+// SetBucketLifecycle sets the lifecycle configuration for a bucket.
+func (m *mockMinioClient) SetBucketLifecycle(ctx context.Context, bucketName string, config *lifecycle.Configuration) error {
+	if err, ok := m.setLifecycleErr[bucketName]; ok {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.buckets[bucketName] {
+		return fmt.Errorf("bucket %s does not exist", bucketName)
+	}
+
+	m.lifecycleConfigs[bucketName] = config
 	return nil
 }
 
@@ -276,4 +343,7 @@ func (m *mockMinioClient) createBucketForTesting(bucketName string) {
 	defer m.mu.Unlock()
 	m.buckets[bucketName] = true
 	m.objects[bucketName] = make(map[string][]byte)
+	m.versioning[bucketName] = true // Enable versioning by default for tests
+	m.objectVersions[bucketName] = make(map[string]map[string][]byte)
+	m.latestVersions[bucketName] = make(map[string]string)
 }

@@ -13,6 +13,7 @@ import (
 // Client wraps the MinIO client and provides blob storage operations.
 type Client struct {
 	minioClient minioClientInterface
+	config      *configurations.Config
 }
 
 // NewClient creates a new MinIO client with the provided configuration.
@@ -53,6 +54,7 @@ func NewClient(ctx context.Context, cfg *configurations.Config) (*Client, error)
 
 	return &Client{
 		minioClient: newMinioClientAdapter(minioClient),
+		config:      cfg,
 	}, nil
 }
 

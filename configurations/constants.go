@@ -13,5 +13,11 @@ const (
 	// DefaultHealthPort is the default port for the health check server
 	DefaultHealthPort int = 8080
 
+	// DefaultDeleteMarkerCleanupDelayDays is the default delay in days before delete markers are cleaned up
+	DefaultDeleteMarkerCleanupDelayDays int = 1
+
+	// DefaultNonCurrentVersionCleanupDelayDays is the default delay in days before non-current versions are cleaned up
+	DefaultNonCurrentVersionCleanupDelayDays int = 1
+
 	AppName = "NimbusDb"
 )

@@ -7,8 +7,10 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 var (
@@ -40,16 +42,19 @@ func validateBucketName(bucketName string) error {
 }
 
 // ReadFile reads a file from MinIO and returns its contents as a byte array.
+// If versionID is provided, it reads the specific version of the file.
+// If versionID is empty, it reads the latest version.
 //
 // params:
 //   - ctx: Context for the operation
 //   - bucketName: The name of the bucket to read from
 //   - fileName: The name of the file to read
+//   - versionID: Optional version ID to read a specific version. If empty, reads the latest version.
 //
 // return:
 //   - []byte: The file contents
 //   - error: An error if the file could not be read
-func (c *Client) ReadFile(ctx context.Context, bucketName, fileName string) ([]byte, error) {
+func (c *Client) ReadFile(ctx context.Context, bucketName, fileName, versionID string) ([]byte, error) {
 	if bucketName == "" {
 		return nil, fmt.Errorf("bucket name cannot be empty")
 	}
@@ -57,7 +62,12 @@ func (c *Client) ReadFile(ctx context.Context, bucketName, fileName string) ([]b
 		return nil, fmt.Errorf("file name cannot be empty")
 	}
 
-	object, err := c.minioClient.GetObject(ctx, bucketName, fileName, minio.GetObjectOptions{})
+	opts := minio.GetObjectOptions{}
+	if versionID != "" {
+		opts.VersionID = versionID
+	}
+
+	object, err := c.minioClient.GetObject(ctx, bucketName, fileName, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object %s: %w", fileName, err)
 	}
@@ -80,26 +90,27 @@ func (c *Client) ReadFile(ctx context.Context, bucketName, fileName string) ([]b
 //   - data: The data to write
 //
 // return:
+//   - string: The version ID of the written file
 //   - error: An error if the file could not be written
-func (c *Client) WriteFile(ctx context.Context, bucketName, fileName string, data []byte) error {
+func (c *Client) WriteFile(ctx context.Context, bucketName, fileName string, data []byte) (string, error) {
 	if bucketName == "" {
-		return fmt.Errorf("bucket name cannot be empty")
+		return "", fmt.Errorf("bucket name cannot be empty")
 	}
 	if fileName == "" {
-		return fmt.Errorf("file name cannot be empty")
+		return "", fmt.Errorf("file name cannot be empty")
 	}
 	if data == nil {
-		return fmt.Errorf("data cannot be nil")
+		return "", fmt.Errorf("data cannot be nil")
 	}
 
-	_, err := c.minioClient.PutObject(ctx, bucketName, fileName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+	uploadInfo, err := c.minioClient.PutObject(ctx, bucketName, fileName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: "application/octet-stream",
 	})
 	if err != nil {
-		return fmt.Errorf("failed to put object %s: %w", fileName, err)
+		return "", fmt.Errorf("failed to put object %s: %w", fileName, err)
 	}
 
-	return nil
+	return uploadInfo.VersionID, nil
 }
 
 // CreateBucket creates a new bucket in MinIO with versioning enabled.
@@ -138,5 +149,46 @@ func (c *Client) CreateBucket(ctx context.Context, bucketName string) error {
 		return fmt.Errorf("failed to enable versioning on bucket %s: %w", bucketName, err)
 	}
 
+	// Apply lifecycle management rules
+	if c.config != nil {
+		// Use context with timeout for lifecycle operations to prevent hanging
+		lifecycleCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		err = c.applyLifecycleRules(lifecycleCtx, bucketName)
+		if err != nil {
+			return fmt.Errorf("failed to apply lifecycle rules to bucket %s: %w", bucketName, err)
+		}
+	}
+
 	return nil
+}
+
+// applyLifecycleRules applies lifecycle management rules to a bucket.
+// It configures deletion of delete markers and non-current versions based on config settings.
+func (c *Client) applyLifecycleRules(ctx context.Context, bucketName string) error {
+	// Get days from config (already in days, no conversion needed)
+	deleteMarkerDays := c.config.Blob.DeleteMarkerCleanupDelayDays
+	nonCurrentVersionDays := c.config.Blob.NonCurrentVersionCleanupDelayDays
+
+	// Build lifecycle configuration
+	lifecycleConfig := &lifecycle.Configuration{
+		Rules: []lifecycle.Rule{
+			{
+				ID:     "CleanDeleteMarkers",
+				Status: "Enabled",
+				DelMarkerExpiration: lifecycle.DelMarkerExpiration{
+					Days: deleteMarkerDays,
+				},
+			},
+			{
+				ID:     "CleanOldVersions",
+				Status: "Enabled",
+				NoncurrentVersionExpiration: lifecycle.NoncurrentVersionExpiration{
+					NoncurrentDays: lifecycle.ExpirationDays(nonCurrentVersionDays),
+				},
+			},
+		},
+	}
+
+	return c.minioClient.SetBucketLifecycle(ctx, bucketName, lifecycleConfig)
 }
