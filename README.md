@@ -26,10 +26,7 @@ Nimbus excels for workloads matching these patterns:
 
 **Ideal use cases**: Event sourcing, audit trails, time-series logs, document stores, and any workload where data is append-heavy with lookups by a single Id.
 
-- Single object retrieval by id
-- Event storage such as audit trail.
-
-If you have a workload that can fits into these criteria, you can benefit by using Nimbus to achieve massive scale at extremely low cost.
+If you have a workload that can fit into these criteria, you can benefit by using Nimbus to achieve massive scale at extremely low cost.
 
 ## API
 
