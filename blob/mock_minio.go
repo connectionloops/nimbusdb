@@ -82,8 +82,8 @@ func (m *mockMinioClient) GetObject(ctx context.Context, bucketName, objectName 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	bucket, exists := m.objects[bucketName]
-	if !exists {
+	// Check if bucket exists
+	if !m.buckets[bucketName] {
 		return nil, fmt.Errorf("bucket %s does not exist", bucketName)
 	}
 
@@ -100,7 +100,19 @@ func (m *mockMinioClient) GetObject(ctx context.Context, bucketName, objectName 
 		}
 	} else {
 		// No version specified, read latest version
-		data, found = bucket[objectName]
+		// For versioned buckets, use latestVersions to find current version and read from objectVersions
+		if m.versioning[bucketName] && m.latestVersions[bucketName] != nil {
+			latestVersionID, hasLatest := m.latestVersions[bucketName][objectName]
+			if hasLatest && m.objectVersions[bucketName] != nil && m.objectVersions[bucketName][objectName] != nil {
+				data, found = m.objectVersions[bucketName][objectName][latestVersionID]
+			}
+		} else {
+			// For non-versioned buckets, read from objects map
+			bucket, exists := m.objects[bucketName]
+			if exists {
+				data, found = bucket[objectName]
+			}
+		}
 		if !found {
 			return nil, fmt.Errorf("object %s does not exist in bucket %s", objectName, bucketName)
 		}
@@ -125,16 +137,10 @@ func (m *mockMinioClient) PutObject(ctx context.Context, bucketName, objectName 
 		return minio.UploadInfo{}, fmt.Errorf("bucket %s does not exist", bucketName)
 	}
 
-	if m.objects[bucketName] == nil {
-		m.objects[bucketName] = make(map[string][]byte)
-	}
-
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return minio.UploadInfo{}, err
 	}
-
-	m.objects[bucketName][objectName] = data
 
 	// Generate version ID if versioning is enabled
 	var versionID string
@@ -152,9 +158,15 @@ func (m *mockMinioClient) PutObject(ctx context.Context, bucketName, objectName 
 			m.latestVersions[bucketName] = make(map[string]string)
 		}
 
-		// Store the versioned data
+		// Store the versioned data (only in objectVersions for versioned buckets)
 		m.objectVersions[bucketName][objectName][versionID] = data
 		m.latestVersions[bucketName][objectName] = versionID
+	} else {
+		// Store in objects map only for non-versioned buckets
+		if m.objects[bucketName] == nil {
+			m.objects[bucketName] = make(map[string][]byte)
+		}
+		m.objects[bucketName][objectName] = data
 	}
 
 	return minio.UploadInfo{
