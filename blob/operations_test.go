@@ -1,9 +1,21 @@
 package blob
 
 import (
+	"NimbusDb/configurations"
 	"context"
+	"strings"
 	"testing"
 )
+
+// getTestConfig returns a test configuration with lifecycle settings.
+func getTestConfig() *configurations.Config {
+	return &configurations.Config{
+		Blob: configurations.BlobConfig{
+			DeleteMarkerCleanupDelayDays:      1,
+			NonCurrentVersionCleanupDelayDays: 1,
+		},
+	}
+}
 
 // setupMockClient creates a test client with a mock MinIO implementation.
 func setupMockClient(t *testing.T) (*Client, string) {
@@ -13,7 +25,7 @@ func setupMockClient(t *testing.T) (*Client, string) {
 	// Pre-create the bucket for testing
 	mockClient.createBucketForTesting(bucketName)
 
-	client := NewClientWithInterface(mockClient)
+	client := NewClientWithInterface(mockClient, getTestConfig())
 	return client, bucketName
 }
 
@@ -346,5 +358,27 @@ func TestClient_ReadFile_InvalidVersionID(t *testing.T) {
 	_, err = client.ReadFile(ctx, bucketName, testFileName, "invalid-version-id")
 	if err == nil {
 		t.Error("ReadFile() should have failed with invalid version ID")
+	}
+}
+
+func TestClient_CreateBucket_NilConfig(t *testing.T) {
+	mockClient := newMockMinioClient()
+	// Create client without config
+	client := NewClientWithInterface(mockClient, nil)
+
+	ctx := context.Background()
+	bucketName := "test-bucket-no-config"
+
+	// CreateBucket should fail when config is nil
+	err := client.CreateBucket(ctx, bucketName)
+	if err == nil {
+		t.Error("CreateBucket() should have failed with nil config")
+		return
+	}
+
+	// Check that the error message contains key parts
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "config is required") || !strings.Contains(errMsg, "lifecycle rules") {
+		t.Errorf("Expected error message about config being required for lifecycle rules, got: %v", err)
 	}
 }
