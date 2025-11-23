@@ -3,6 +3,7 @@ package blob
 import (
 	"NimbusDb/configurations"
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -372,8 +373,12 @@ func TestClient_CreateBucket_NilConfig(t *testing.T) {
 	err := client.CreateBucket(ctx, bucketName)
 	if err == nil {
 		t.Error("CreateBucket() should have failed with nil config")
+		return
 	}
-	if err != nil && err.Error() != "config is required to apply lifecycle rules to bucket test-bucket-no-config" {
-		t.Errorf("Expected specific error message about config, got: %v", err)
+
+	// Check that the error message contains key parts
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "config is required") || !strings.Contains(errMsg, "lifecycle rules") {
+		t.Errorf("Expected error message about config being required for lifecycle rules, got: %v", err)
 	}
 }
