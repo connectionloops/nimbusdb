@@ -225,7 +225,7 @@ Run
 gofmt -l -w .
 ```
 
-to auto format code
+to auto-format code.
 
 ## Troubleshooting
 
