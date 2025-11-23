@@ -96,7 +96,13 @@ func TestNewClient_EmptySecretAccessKey(t *testing.T) {
 
 func TestNewClientWithInterface(t *testing.T) {
 	mockClient := newMockMinioClient()
-	client := NewClientWithInterface(mockClient)
+	testConfig := &configurations.Config{
+		Blob: configurations.BlobConfig{
+			DeleteMarkerCleanupDelayDays:      1,
+			NonCurrentVersionCleanupDelayDays: 1,
+		},
+	}
+	client := NewClientWithInterface(mockClient, testConfig)
 
 	if client == nil {
 		t.Fatal("NewClientWithInterface() returned nil client")
@@ -104,6 +110,10 @@ func TestNewClientWithInterface(t *testing.T) {
 
 	if client.minioClient == nil {
 		t.Fatal("NewClientWithInterface() returned client with nil minioClient")
+	}
+
+	if client.config == nil {
+		t.Fatal("NewClientWithInterface() returned client with nil config")
 	}
 }
 

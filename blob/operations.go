@@ -150,14 +150,16 @@ func (c *Client) CreateBucket(ctx context.Context, bucketName string) error {
 	}
 
 	// Apply lifecycle management rules
-	if c.config != nil {
-		// Use context with timeout for lifecycle operations to prevent hanging
-		lifecycleCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		err = c.applyLifecycleRules(lifecycleCtx, bucketName)
-		if err != nil {
-			return fmt.Errorf("failed to apply lifecycle rules to bucket %s: %w", bucketName, err)
-		}
+	if c.config == nil {
+		return fmt.Errorf("config is required to apply lifecycle rules to bucket %s", bucketName)
+	}
+
+	// Use context with timeout for lifecycle operations to prevent hanging
+	lifecycleCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err = c.applyLifecycleRules(lifecycleCtx, bucketName)
+	if err != nil {
+		return fmt.Errorf("failed to apply lifecycle rules to bucket %s: %w", bucketName, err)
 	}
 
 	return nil
