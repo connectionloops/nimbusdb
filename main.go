@@ -2,7 +2,12 @@ package main
 
 import (
 	"NimbusDb/configurations"
+	"NimbusDb/health"
+	"NimbusDb/version"
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/rs/zerolog/log"
 )
@@ -22,7 +27,7 @@ func main() {
 
 	// Handle version flag
 	if args.Version {
-		log.Info().Msgf("%s version: %s", configurations.AppName, "dev")
+		log.Info().Msgf("%s version: %s", configurations.AppName, version.GetVersion())
 		os.Exit(0)
 	}
 
@@ -41,11 +46,35 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
-	log.Info().Msgf("Configuration loaded: %+v", cfg)
+	log.Info().
+		Uint16("shardCount", cfg.ShardCount).
+		Int("healthPort", cfg.HealthPort).
+		Str("blobEndpoint", cfg.Blob.Endpoint).
+		Bool("blobUseSSL", cfg.Blob.UseSSL).
+		Msg("Configuration loaded")
 	if args.Mode == configurations.ModeSingle {
 		log.Info().Msgf("%s is running in single mode", configurations.AppName)
 	} else if args.Mode == configurations.ModeDistributed {
 		log.Info().Msgf("%s is running in distributed mode", configurations.AppName)
 	}
+
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start health check server (port is set in config, defaults to 8080)
+	health.StartHealthServer(ctx, cfg.HealthPort)
+
+	// Mark application as ready after initialization
+	health.SetReady(true)
 	log.Info().Msgf("%s is running and accepting requests", configurations.AppName)
+
+	// Wait for interrupt signal for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	<-sigChan
+	log.Info().Msg("Shutting down...")
+	health.SetReady(false)
+	cancel()
 }
