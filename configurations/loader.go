@@ -1,6 +1,7 @@
 package configurations
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -11,22 +12,33 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// buildEnvToKoanfMap builds a map from env var names to koanf keys using struct tags
+// buildEnvToKoanfMap builds a map from env var names to koanf keys using struct tags.
+// It recursively processes nested structs to handle embedded configurations.
 func buildEnvToKoanfMap() map[string]string {
 	envMap := make(map[string]string)
 	cfgType := reflect.TypeOf(Config{})
 
-	for i := 0; i < cfgType.NumField(); i++ {
-		field := cfgType.Field(i)
+	buildEnvToKoanfMapRecursive(cfgType, "", envMap)
+	return envMap
+}
+
+// buildEnvToKoanfMapRecursive recursively processes struct fields to build the env to koanf map.
+func buildEnvToKoanfMapRecursive(typ reflect.Type, prefix string, envMap map[string]string) {
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
 		envTag := field.Tag.Get("env")
 		koanfTag := field.Tag.Get("koanf")
 
 		if envTag != "" && koanfTag != "" {
 			envMap[envTag] = koanfTag
 		}
-	}
 
-	return envMap
+		// Handle nested structs (but skip if it's already been processed via tags)
+		if field.Type.Kind() == reflect.Struct && envTag == "" {
+			// Recursively process nested struct
+			buildEnvToKoanfMapRecursive(field.Type, prefix, envMap)
+		}
+	}
 }
 
 // Load loads the configuration from the given path.
@@ -71,5 +83,25 @@ func Load(path string) (*Config, error) {
 	if err := k.Unmarshal("", cfg); err != nil {
 		return nil, err
 	}
+
+	// 4. Set defaults for fields that weren't set
+	if cfg.HealthPort == 0 {
+		cfg.HealthPort = DefaultHealthPort
+	}
+
+	// 5. Validate configuration
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// validateConfig validates the configuration values.
+func validateConfig(cfg *Config) error {
+	// Validate health port range (1-65535)
+	if cfg.HealthPort < 1 || cfg.HealthPort > 65535 {
+		return fmt.Errorf("health port must be between 1 and 65535, got %d", cfg.HealthPort)
+	}
+	return nil
 }
