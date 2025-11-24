@@ -156,6 +156,11 @@ func RespondWithNatsSuccess(msg *nats.Msg) {
 // return:
 //   - bool: true if shutdown was detected (caller should return), false otherwise
 func checkShutdownAndRespond(msg *nats.Msg) bool {
+	// If context is nil, initialization hasn't completed properly
+	if globalShutdownCtx == nil {
+		return false
+	}
+
 	select {
 	case <-globalShutdownCtx.Done():
 		// Shutdown initiated, reject new blob operations
