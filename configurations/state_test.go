@@ -45,6 +45,25 @@ func TestNewStateEmptySlice(t *testing.T) {
 	}
 }
 
+// TestNewStateDefensiveCopy verifies that NewState creates a defensive copy of the input slice.
+func TestNewStateDefensiveCopy(t *testing.T) {
+	originalIDs := []uint16{1, 2, 3, 4, 5}
+	state := NewState(originalIDs)
+
+	// Modify the original slice
+	originalIDs[0] = 999
+	originalIDs[2] = 888
+
+	// Verify the state's internal slice was not affected
+	stateIDs := state.GetShardIDs()
+	if stateIDs[0] != 1 {
+		t.Errorf("Expected internal state to be unaffected: expected 1, got %d", stateIDs[0])
+	}
+	if stateIDs[2] != 3 {
+		t.Errorf("Expected internal state to be unaffected: expected 3, got %d", stateIDs[2])
+	}
+}
+
 // TestGetShardIDs verifies that GetShardIDs returns a copy of the shard IDs.
 func TestGetShardIDs(t *testing.T) {
 	originalIDs := []uint16{1, 2, 3, 4, 5}

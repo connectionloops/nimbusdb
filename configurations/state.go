@@ -7,6 +7,8 @@ type State struct {
 }
 
 // NewState creates a new State instance with the given shard IDs.
+// Creates a defensive copy of the input slice to prevent external modifications
+// from affecting the internal state.
 //
 // params:
 //   - shardIDs: The list of shard IDs assigned to this node
@@ -14,8 +16,11 @@ type State struct {
 // return:
 //   - *State: A new State instance
 func NewState(shardIDs []uint16) *State {
+	// Create a defensive copy to prevent external modifications
+	shardIDsCopy := make([]uint16, len(shardIDs))
+	copy(shardIDsCopy, shardIDs)
 	return &State{
-		shardIDs: shardIDs,
+		shardIDs: shardIDsCopy,
 	}
 }
 
