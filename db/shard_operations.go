@@ -9,13 +9,17 @@ import (
 )
 
 const (
-	// PointWrite represents a write operation
+	// PointWrite represents a write operation.
+	// See devdocs/api.md (Operation Types) for details.
 	PointWrite = 0
-	// PointRead represents a read operation
+	// PointRead represents a read operation.
+	// See devdocs/api.md (Operation Types) for details.
 	PointRead = 1
-	// CollectionWrite represents a write operation
+	// CollectionWrite represents a write operation.
+	// See devdocs/api.md (Operation Types) for details.
 	CollectionWrite = 2
-	// CollectionRead represents a read operation
+	// CollectionRead represents a read operation.
+	// See devdocs/api.md (Operation Types) for details.
 	CollectionRead = 3
 )
 
