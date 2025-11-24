@@ -171,5 +171,7 @@ func handleReadOperation(msg *nats.Msg, shardID uint16, fileName string, bucketN
 	}
 
 	// Respond with raw byte[] data directly (as per API spec: shard owner never parses data)
-	msg.Respond(data)
+	if err := msg.Respond(data); err != nil {
+		log.Error().Err(err).Str("fileName", fileName).Str("bucketName", bucketName).Uint16("shardID", shardID).Msg("Failed to send NATS response in handleReadOperation")
+	}
 }
