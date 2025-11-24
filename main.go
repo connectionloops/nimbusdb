@@ -131,21 +131,25 @@ func connectNATS(cfg *configurations.Config) *nats.Conn {
 	return nc
 }
 
-// drainNats gracefully shuts down NATS by closing channels, unsubscribing from all subscriptions,
-// and then draining the connection with a timeout.
+// drainNats gracefully shuts down NATS by unsubscribing from all subscriptions,
+// waiting for in-flight messages to complete, closing channels, and then draining the connection with a timeout.
 func drainNats(nc *nats.Conn, subscriptions []*nats.Subscription, shardHandlers []*db.ShardHandlerInfo, cfg *configurations.Config) {
-	// Close all shard handler channels first to stop processing new messages
-	log.Info().Msg("Closing shard handler channels...")
-	for _, handler := range shardHandlers {
-		close(handler.Channel)
-	}
-
-	// Unsubscribe from all NATS subscriptions before draining
+	// Unsubscribe from all NATS subscriptions first to stop receiving new messages
 	log.Info().Msg("Unsubscribing from NATS subjects...")
 	for _, sub := range subscriptions {
 		if err := sub.Unsubscribe(); err != nil {
 			log.Error().Err(err).Msg("Failed to unsubscribe from NATS subject")
 		}
+	}
+
+	// Wait briefly for any in-flight messages to be processed
+	log.Info().Msg("Waiting for in-flight messages to complete...")
+	time.Sleep(100 * time.Millisecond)
+
+	// Now it's safe to close all shard handler channels
+	log.Info().Msg("Closing shard handler channels...")
+	for _, handler := range shardHandlers {
+		close(handler.Channel)
 	}
 
 	// Drain the NATS connection to allow in-flight messages to complete
