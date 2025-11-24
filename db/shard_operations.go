@@ -80,22 +80,11 @@ func StartShardHandlers() []*ShardHandlerInfo {
 
 // handleShardOperation handles requests for shard operations (write/read).
 // It processes the operation based on the type header and responds accordingly.
-// Checks shutdown context before starting any blob operations to ensure clean shutdown.
 // params:
 //   - shardID: The shard ID for this operation
 //   - ch: The channel to receive the messages from
 func handleShardOperation(shardID uint16, ch chan *nats.Msg) {
 	for msg := range ch {
-		// Check if shutdown has been initiated before starting new operations
-		select {
-		case <-globalShutdownCtx.Done():
-			// Shutdown initiated, stop processing new messages
-			RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
-			continue
-		default:
-			// No shutdown signal, continue processing
-		}
-
 		// Extract headers
 		headers, err := ExtractShardOperationHeaders(msg)
 		if err != nil {
@@ -123,6 +112,7 @@ func handleShardOperation(shardID uint16, ch chan *nats.Msg) {
 // handleWriteOperation handles write requests for shard operations.
 // It writes the message data directly to blob storage without parsing.
 // If overwrite is false and the file already exists, it returns an error.
+// Checks shutdown context before starting blob operations to ensure clean shutdown.
 // params:
 //   - msg: The NATS message which contains pure byte[] data to be written to blob storage
 //   - shardID: The shard ID for this operation
@@ -130,6 +120,16 @@ func handleShardOperation(shardID uint16, ch chan *nats.Msg) {
 //   - bucketName: The bucket name where the data should be stored
 //   - overwrite: If false, returns an error if the file already exists
 func handleWriteOperation(msg *nats.Msg, shardID uint16, fileName string, bucketName string, overwrite bool) {
+	// Check if shutdown has been initiated before starting blob operation
+	select {
+	case <-globalShutdownCtx.Done():
+		// Shutdown initiated, reject new blob operations
+		RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
+		return
+	default:
+		// No shutdown signal, continue with operation
+	}
+
 	// todo: metrics for write latency and count
 	// Create context with timeout for blob operation using config value
 	ctx, cancel := context.WithTimeout(context.Background(), globalConfig.Blob.BlobOperationTimeout)
@@ -163,12 +163,23 @@ func handleWriteOperation(msg *nats.Msg, shardID uint16, fileName string, bucket
 // handleReadOperation handles read requests for shard operations.
 // It reads the file data directly from blob storage and returns it as byte[].
 // The data is returned directly without parsing, as per API specification.
+// Checks shutdown context before starting blob operations to ensure clean shutdown.
 // params:
 //   - msg: The NATS message to respond to
 //   - shardID: The shard ID for this operation
 //   - fileName: The file path to read from
 //   - bucketName: The bucket name where the file is stored
 func handleReadOperation(msg *nats.Msg, shardID uint16, fileName string, bucketName string) {
+	// Check if shutdown has been initiated before starting blob operation
+	select {
+	case <-globalShutdownCtx.Done():
+		// Shutdown initiated, reject new blob operations
+		RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
+		return
+	default:
+		// No shutdown signal, continue with operation
+	}
+
 	// todo: metrics for read latency and count
 	// Create context with timeout for blob operation using config value
 	ctx, cancel := context.WithTimeout(context.Background(), globalConfig.Blob.BlobOperationTimeout)
