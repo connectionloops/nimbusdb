@@ -21,7 +21,10 @@ Built from scratch in Go with minimal resource footprint. Uses NATS as the commu
 
 Nimbus excels for workloads matching these patterns:
 
-1. **Point lookups by ID**: Fast, direct retrieval of individual objects. e.g. get object with id=some_uuid
+1. **Point lookups by ID**: Fast, direct retrieval of individual objects. i.e. get object with some id. e.g. getting medical results by visit id. or getting full information of a medical diagnosis test by test id etc.
+
+   - People often underestimate this usecase. It is quite versatile and many workloads can be fit into this.
+
 2. **Temporal streaming**: Stream objects from collections in insertion timestamp order. e.g. get all activities performed by a user.
 
 **Ideal use cases**: Event sourcing, audit trails, time-series logs, document stores, and any workload where data is append-heavy with lookups by a single Id.
