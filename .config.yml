@@ -1,1 +1,20 @@
+# This is an example configuration file for NimbusDb.
+# No real secrets are stored in this file.
+# Actual secrets are injected through env variables.
+# This file just shows your shape of yml based configuration
+
 shardCount: 16
+logLevel: "debug"
+nats:
+  url: "{NATS_URL}"
+  creds: "{NATS_CREDS}"
+  subjectPrefix: "nimbus"
+blob:
+  endpoint: "{BLOB_ENDPOINT}"
+  accessKeyID: "admin"
+  secretAccessKey: "{BLOB_SECRET_ACCESS_KEY}"
+  useSSL: false
+  deleteMarkerCleanupDelayDays: 1
+  nonCurrentVersionCleanupDelayDays: 1
+db:
+  channelBufferSize: 256

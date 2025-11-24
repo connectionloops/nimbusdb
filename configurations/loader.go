@@ -30,14 +30,26 @@ func buildEnvToKoanfMapRecursive(typ reflect.Type, prefix string, envMap map[str
 		envTag := field.Tag.Get("env")
 		koanfTag := field.Tag.Get("koanf")
 
-		if envTag != "" && koanfTag != "" {
-			envMap[envTag] = koanfTag
+		// Build the full koanf key path
+		var fullKoanfKey string
+		if prefix != "" {
+			if koanfTag != "" {
+				fullKoanfKey = prefix + "." + koanfTag
+			} else {
+				fullKoanfKey = prefix
+			}
+		} else {
+			fullKoanfKey = koanfTag
 		}
 
-		// Handle nested structs (but skip if it's already been processed via tags)
-		if field.Type.Kind() == reflect.Struct && envTag == "" {
-			// Recursively process nested struct
-			buildEnvToKoanfMapRecursive(field.Type, prefix, envMap)
+		if envTag != "" && fullKoanfKey != "" {
+			envMap[envTag] = fullKoanfKey
+		}
+
+		// Handle nested structs
+		if field.Type.Kind() == reflect.Struct && koanfTag != "" {
+			// Recursively process nested struct with the parent's koanf tag as prefix
+			buildEnvToKoanfMapRecursive(field.Type, fullKoanfKey, envMap)
 		}
 	}
 }
@@ -95,27 +107,44 @@ func Load(path string) (*Config, error) {
 	if cfg.Blob.NonCurrentVersionCleanupDelayDays == 0 {
 		cfg.Blob.NonCurrentVersionCleanupDelayDays = DefaultNonCurrentVersionCleanupDelayDays
 	}
-
+	if cfg.NATS.URL == "" {
+		cfg.NATS.URL = DefaultNATSURL
+	}
+	if cfg.NATS.SubjectPrefix == "" {
+		cfg.NATS.SubjectPrefix = DefaultNATSSubjectPrefix
+	}
+	if cfg.NATS.NatsDrainTimeout == 0 {
+		cfg.NATS.NatsDrainTimeout = DefaultNATSDrainTimeout
+	}
+	if cfg.NATS.ShutdownGracePeriod == 0 {
+		cfg.NATS.ShutdownGracePeriod = DefaultNATSShutdownGracePeriod
+	}
+	if cfg.Blob.BlobOperationTimeout == 0 {
+		cfg.Blob.BlobOperationTimeout = DefaultBlobOperationTimeout
+	}
+	if cfg.Db.ChannelBufferSize == 0 {
+		cfg.Db.ChannelBufferSize = DefaultDbChannelBufferSize
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = DefaultLogLevel
+	}
 	// 5. Validate configuration
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
 
 	// 6. Log configuration
-	log.Info().Msgf(`Configuration loaded:
-		shardCount: %d
-		healthPort: %d
-		blobEndpoint: %s
-		blobUseSSL: %t
-		blobDeleteMarkerCleanupDelayDays: %d
-		blobNonCurrentVersionCleanupDelayDays: %d`,
-		cfg.ShardCount,
-		cfg.HealthPort,
-		cfg.Blob.Endpoint,
-		cfg.Blob.UseSSL,
-		cfg.Blob.DeleteMarkerCleanupDelayDays,
-		cfg.Blob.NonCurrentVersionCleanupDelayDays,
-	)
+	log.Info().Msg("Configuration loaded:")
+	log.Info().Msgf("shardCount: %d", cfg.ShardCount)
+	log.Info().Msgf("healthPort: %d", cfg.HealthPort)
+	log.Info().Msgf("blobEndpoint: %s", cfg.Blob.Endpoint)
+	log.Info().Msgf("blobUseSSL: %t", cfg.Blob.UseSSL)
+	log.Info().Msgf("blobDeleteMarkerCleanupDelayDays: %d", cfg.Blob.DeleteMarkerCleanupDelayDays)
+	log.Info().Msgf("blobNonCurrentVersionCleanupDelayDays: %d", cfg.Blob.NonCurrentVersionCleanupDelayDays)
+	log.Info().Msgf("natsURL: %s", cfg.NATS.URL)
+	log.Info().Msgf("natsSubjectPrefix: %s", cfg.NATS.SubjectPrefix)
+	log.Info().Msgf("dbChannelBufferSize: %d", cfg.Db.ChannelBufferSize)
+	log.Info().Msgf("logLevel: %s", cfg.LogLevel)
 
 	return cfg, nil
 }
@@ -134,6 +163,80 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Blob.NonCurrentVersionCleanupDelayDays < 1 || cfg.Blob.NonCurrentVersionCleanupDelayDays > maxLifecycleDays {
 		return fmt.Errorf("non-current version cleanup delay days must be between 1 and %d, got %d", maxLifecycleDays, cfg.Blob.NonCurrentVersionCleanupDelayDays)
+	}
+
+	// Validate log level
+	if err := validateLogLevel(cfg.LogLevel); err != nil {
+		return err
+	}
+
+	// Validate NATS configuration
+	if err := validateNATSConfig(&cfg.NATS); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// MustLoad loads the configuration from the given path and calls log.Fatal() if an error occurs.
+// This is a convenience function for use in main() to keep error handling out of the main flow.
+//
+// params:
+//   - path: The path to the YAML configuration file. If empty, only environment variables will be used.
+//
+// return:
+//   - *Config: The loaded configuration struct. The function will never return nil as it calls log.Fatal() on error.
+func MustLoad(path string) *Config {
+	cfg, err := Load(path)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
+	return cfg
+}
+
+// validateLogLevel validates that the log level is one of the valid values.
+func validateLogLevel(level string) error {
+	validLevels := []string{
+		LogLevelTrace,
+		LogLevelDebug,
+		LogLevelInfo,
+		LogLevelWarn,
+		LogLevelError,
+		LogLevelFatal,
+		LogLevelPanic,
+	}
+
+	levelLower := strings.ToLower(strings.TrimSpace(level))
+	for _, valid := range validLevels {
+		if levelLower == valid {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid log level '%s': must be one of %s", level, strings.Join(validLevels, ", "))
+}
+
+// validateNATSConfig validates the NATS configuration values.
+func validateNATSConfig(cfg *NATSConfig) error {
+	// SubjectPrefix must be a valid NATS subject prefix
+	// NATS subject tokens can contain alphanumeric characters, dots, underscores, dashes, and colons
+	// They cannot contain spaces or be empty
+	if cfg.SubjectPrefix == "" {
+		return fmt.Errorf("NATS subject prefix cannot be empty")
+	}
+
+	// Check for invalid characters in subject prefix
+	// Valid characters: alphanumeric, dots, underscores, dashes, colons
+	for _, char := range cfg.SubjectPrefix {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '.' ||
+			char == '_' ||
+			char == '-' ||
+			char == ':') {
+			return fmt.Errorf("NATS subject prefix contains invalid character '%c': only alphanumeric characters, dots, underscores, dashes, and colons are allowed", char)
+		}
 	}
 
 	return nil

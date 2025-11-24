@@ -67,3 +67,8 @@ func (a *minioClientAdapter) RemoveBucket(ctx context.Context, bucketName string
 func (a *minioClientAdapter) SetBucketLifecycle(ctx context.Context, bucketName string, config *lifecycle.Configuration) error {
 	return a.client.SetBucketLifecycle(ctx, bucketName, config)
 }
+
+// StatObject retrieves object metadata without reading the object.
+func (a *minioClientAdapter) StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	return a.client.StatObject(ctx, bucketName, objectName, opts)
+}

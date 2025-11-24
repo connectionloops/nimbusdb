@@ -41,4 +41,7 @@ type minioClientInterface interface {
 
 	// SetBucketLifecycle sets the lifecycle configuration for a bucket.
 	SetBucketLifecycle(ctx context.Context, bucketName string, config *lifecycle.Configuration) error
+
+	// StatObject retrieves object metadata without reading the object.
+	StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error)
 }
