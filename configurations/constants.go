@@ -36,6 +36,9 @@ const (
 	// DefaultNATSDrainTimeout is the default timeout for NATS drain operation
 	DefaultNATSDrainTimeout = 30 * time.Second
 
+	// DefaultNATSShutdownGracePeriod is the default grace period to wait for in-flight messages during shutdown
+	DefaultNATSShutdownGracePeriod = 100 * time.Millisecond
+
 	// DefaultBlobOperationTimeout is the default timeout for blob operations
 	DefaultBlobOperationTimeout = 30 * time.Second
 

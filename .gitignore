@@ -4,6 +4,11 @@
 *.dll
 *.so
 *.dylib
+NimbusDb
+
+# Project-specific binaries
+/NimbusDb
+/main
 
 # Test binary, built with `go test -c`
 *.test
