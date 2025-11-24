@@ -34,11 +34,12 @@ type ShardHandlerInfo struct {
 // Currently subscribes to all shards (0 to shardCount-1) as a placeholder
 // until shard ownership is implemented via raft metadata cluster.
 // Panics if InitializeGlobals has not been called first.
+// Uses the global shutdown context to prevent new blob operations from starting during shutdown.
 //
 // return:
 //   - []*ShardHandlerInfo: All handler info created for shard handlers (includes channels for cleanup)
 func StartShardHandlers() []*ShardHandlerInfo {
-	if globalConfig == nil || globalNATSConn == nil || globalBlobClient == nil {
+	if globalConfig == nil || globalNATSConn == nil || globalBlobClient == nil || globalShutdownCtx == nil {
 		log.Fatal().Msg("InitializeGlobals must be called before StartShardHandlers")
 	}
 
@@ -79,11 +80,22 @@ func StartShardHandlers() []*ShardHandlerInfo {
 
 // handleShardOperation handles requests for shard operations (write/read).
 // It processes the operation based on the type header and responds accordingly.
+// Checks shutdown context before starting any blob operations to ensure clean shutdown.
 // params:
 //   - shardID: The shard ID for this operation
 //   - ch: The channel to receive the messages from
 func handleShardOperation(shardID uint16, ch chan *nats.Msg) {
 	for msg := range ch {
+		// Check if shutdown has been initiated before starting new operations
+		select {
+		case <-globalShutdownCtx.Done():
+			// Shutdown initiated, stop processing new messages
+			RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
+			continue
+		default:
+			// No shutdown signal, continue processing
+		}
+
 		// Extract headers
 		headers, err := ExtractShardOperationHeaders(msg)
 		if err != nil {

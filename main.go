@@ -61,7 +61,11 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to create blob client")
 	}
 
-	db.InitializeGlobals(cfg, nc, blobClient)
+	// Create context for graceful shutdown
+	shutdownCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db.InitializeGlobals(cfg, nc, blobClient, shutdownCtx)
 	systemSubscriptions := db.StartSystemHandlers()
 
 	var shardHandlers []*db.ShardHandlerInfo
@@ -82,9 +86,6 @@ func main() {
 	for _, handler := range shardHandlers {
 		subscriptions = append(subscriptions, handler.Subscription)
 	}
-
-	// Create context for graceful shutdown
-	shutdownCtx, cancel := context.WithCancel(context.Background())
 
 	// Start health check server (port is set in config, defaults to 8080)
 	health.StartHealthServer(shutdownCtx, cfg.HealthPort)

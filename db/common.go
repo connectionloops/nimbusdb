@@ -3,6 +3,7 @@ package db
 import (
 	"NimbusDb/blob"
 	"NimbusDb/configurations"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +33,10 @@ var (
 	// globalBlobClient holds the blob client for system handlers.
 	// It is set once during initialization and never modified.
 	globalBlobClient *blob.Client
+	// globalShutdownCtx holds the shutdown context for graceful shutdown.
+	// It is used to signal when the application is shutting down to prevent
+	// new long-running operations from starting.
+	globalShutdownCtx context.Context
 	// initOnce ensures InitializeGlobals can only be called once.
 	initOnce sync.Once
 )
@@ -55,7 +60,7 @@ type DbResponse struct {
 	Status int    `json:"status"`
 }
 
-// InitializeGlobals sets the global configuration, NATS connection, and blob client for use by handlers.
+// InitializeGlobals sets the global configuration, NATS connection, blob client, and shutdown context for use by handlers.
 // This should be called once during application startup before starting handlers.
 // Subsequent calls to this function will be ignored (idempotent).
 //
@@ -63,11 +68,13 @@ type DbResponse struct {
 //   - cfg: The application configuration containing NATS and shard settings
 //   - nc: The NATS connection to use for subscriptions
 //   - blobClient: The blob client to use for storage operations
-func InitializeGlobals(cfg *configurations.Config, nc *nats.Conn, blobClient *blob.Client) {
+//   - shutdownCtx: The context that will be cancelled during graceful shutdown
+func InitializeGlobals(cfg *configurations.Config, nc *nats.Conn, blobClient *blob.Client, shutdownCtx context.Context) {
 	initOnce.Do(func() {
 		globalConfig = cfg
 		globalNATSConn = nc
 		globalBlobClient = blobClient
+		globalShutdownCtx = shutdownCtx
 	})
 }
 
