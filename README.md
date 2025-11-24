@@ -42,6 +42,6 @@ See [API Doc](/devdocs/api.md)
 
 🏗️ Architected by Gaurav Kalele, <br />
 💫 Vibe coded with Cursor <br />
-👮 Thoroughly Reviewd by: Gaurav (Human), Cursor (self review), Copilot (PR Review)
+👮 Thoroughly Reviewed by: Gaurav (Human), Cursor (self review), Copilot (PR Review)
 
 © Connection Loops

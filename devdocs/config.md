@@ -38,6 +38,7 @@ The `Config` struct contains the following sections:
 - Root-level cluster settings
 - Blob storage configuration (`BlobConfig`)
 - NATS messaging configuration (`NATSConfig`)
+- Database configuration (`DbConfig`)
 
 ### Root-Level Configuration Parameters
 
@@ -45,35 +46,47 @@ The `Config` struct contains the following sections:
 | ------------ | -------- | -------------------- | ------------ | ------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `ShardCount` | `uint16` | `SHARD_COUNT`        | `shardCount` | `16`    | Total number of shards in the cluster        | Must be between 1 and 256 (inclusive). **Should be more than total nodes in cluster** |
 | `HealthPort` | `int`    | `HEALTH_PORT`        | `healthPort` | `8080`  | Port number for the health check HTTP server | Must be between 1 and 65535 (inclusive)                                               |
+| `LogLevel`   | `string` | `LOG_LEVEL`          | `logLevel`   | `info`  | Logging verbosity level                      | Must be one of: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`           |
 
 ### Blob Storage Configuration (`BlobConfig`)
 
 The `BlobConfig` struct contains settings for MinIO blob storage integration.
 
-| Parameter                           | Type     | Environment Variable                          | YAML Key                                 | Default | Description                                                                           | Constraints                           |
-| ----------------------------------- | -------- | --------------------------------------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------------------------- | ------------------------------------- |
-| `Endpoint`                          | `string` | `BLOB_ENDPOINT`                               | `blob.endpoint`                          | -       | MinIO server endpoint URL (e.g., `localhost:9000`)                                    | Required for blob operations          |
-| `AccessKeyID`                       | `string` | `BLOB_ACCESS_KEY_ID`                          | `blob.accessKeyID`                       | -       | MinIO access key ID for authentication                                                | Required for blob operations          |
-| `SecretAccessKey`                   | `string` | `BLOB_SECRET_ACCESS_KEY`                      | `blob.secretAccessKey`                   | -       | MinIO secret access key for authentication                                            | Required for blob operations          |
-| `UseSSL`                            | `bool`   | `BLOB_USE_SSL`                                | `blob.useSSL`                            | `false` | Whether to use SSL/TLS for MinIO connections                                          | Boolean (true/false)                  |
-| `DeleteMarkerCleanupDelayDays`      | `int`    | `BLOB_DELETE_MARKER_CLEANUP_DELAY_DAYS`       | `blob.deleteMarkerCleanupDelayDays`      | `1`     | Number of days to wait before cleaning up delete markers in blob storage              | Must be between 1 and 365 (inclusive) |
-| `NonCurrentVersionCleanupDelayDays` | `int`    | `BLOB_NON_CURRENT_VERSION_CLEANUP_DELAY_DAYS` | `blob.nonCurrentVersionCleanupDelayDays` | `1`     | Number of days to wait before cleaning up non-current object versions in blob storage | Must be between 1 and 365 (inclusive) |
+| Parameter                           | Type            | Environment Variable                          | YAML Key                                 | Default | Description                                                                           | Constraints                           |
+| ----------------------------------- | --------------- | --------------------------------------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------------------------- | ------------------------------------- |
+| `Endpoint`                          | `string`        | `BLOB_ENDPOINT`                               | `blob.endpoint`                          | -       | MinIO server endpoint URL (e.g., `localhost:9000`)                                    | Required for blob operations          |
+| `AccessKeyID`                       | `string`        | `BLOB_ACCESS_KEY_ID`                          | `blob.accessKeyID`                       | -       | MinIO access key ID for authentication                                                | Required for blob operations          |
+| `SecretAccessKey`                   | `string`        | `BLOB_SECRET_ACCESS_KEY`                      | `blob.secretAccessKey`                   | -       | MinIO secret access key for authentication                                            | Required for blob operations          |
+| `UseSSL`                            | `bool`          | `BLOB_USE_SSL`                                | `blob.useSSL`                            | `false` | Whether to use SSL/TLS for MinIO connections                                          | Boolean (true/false)                  |
+| `DeleteMarkerCleanupDelayDays`      | `int`           | `BLOB_DELETE_MARKER_CLEANUP_DELAY_DAYS`       | `blob.deleteMarkerCleanupDelayDays`      | `1`     | Number of days to wait before cleaning up delete markers in blob storage              | Must be between 1 and 365 (inclusive) |
+| `NonCurrentVersionCleanupDelayDays` | `int`           | `BLOB_NON_CURRENT_VERSION_CLEANUP_DELAY_DAYS` | `blob.nonCurrentVersionCleanupDelayDays` | `1`     | Number of days to wait before cleaning up non-current object versions in blob storage | Must be between 1 and 365 (inclusive) |
+| `BlobOperationTimeout`              | `time.Duration` | `BLOB_OPERATION_TIMEOUT`                      | `blob.blobOperationTimeout`              | `30s`   | Timeout for blob operations                                                           | Must be a valid duration              |
 
 ### NATS Configuration (`NATSConfig`)
 
 The `NATSConfig` struct contains settings for NATS messaging system integration.
 
-| Parameter       | Type     | Environment Variable  | YAML Key             | Default                 | Description                                      | Constraints                                                                                                    |
-| --------------- | -------- | --------------------- | -------------------- | ----------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `URL`           | `string` | `NATS_URL`            | `nats.url`           | `nats://localhost:4222` | NATS server connection URL                       | Must be a valid NATS URL format                                                                                |
-| `Creds`         | `string` | `NATS_CREDS`          | `nats.creds`         | -                       | Path to NATS credentials file for authentication | Optional, used for NATS authentication                                                                         |
-| `SubjectPrefix` | `string` | `NATS_SUBJECT_PREFIX` | `nats.subjectPrefix` | `nimbus`                | Prefix for all NATS subjects used by NimbusDB    | Must be non-empty; can contain alphanumeric characters, dots (.), underscores (\_), dashes (-), and colons (:) |
+| Parameter          | Type            | Environment Variable  | YAML Key                | Default                 | Description                                      | Constraints                                                                                                    |
+| ------------------ | --------------- | --------------------- | ----------------------- | ----------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `URL`              | `string`        | `NATS_URL`            | `nats.url`              | `nats://localhost:4222` | NATS server connection URL                       | Must be a valid NATS URL format                                                                                |
+| `Creds`            | `string`        | `NATS_CREDS`          | `nats.creds`            | -                       | Path to NATS credentials file for authentication | Optional, used for NATS authentication                                                                         |
+| `SubjectPrefix`    | `string`        | `NATS_SUBJECT_PREFIX` | `nats.subjectPrefix`    | `nimbus`                | Prefix for all NATS subjects used by NimbusDB    | Must be non-empty; can contain alphanumeric characters, dots (.), underscores (\_), dashes (-), and colons (:) |
+| `NatsDrainTimeout` | `time.Duration` | `NATS_DRAIN_TIMEOUT`  | `nats.natsDrainTimeout` | `30s`                   | Timeout for NATS drain operation                 | Must be a valid duration                                                                                       |
+
+### Database Configuration (`DbConfig`)
+
+The `DbConfig` struct contains settings for database operations.
+
+| Parameter           | Type  | Environment Variable     | YAML Key               | Default | Description                                 | Constraints                |
+| ------------------- | ----- | ------------------------ | ---------------------- | ------- | ------------------------------------------- | -------------------------- |
+| `ChannelBufferSize` | `int` | `DB_CHANNEL_BUFFER_SIZE` | `db.channelBufferSize` | `256`   | Buffer size for database operation channels | Must be a positive integer |
 
 ### Example YAML Configuration
 
 ```yaml
 shardCount: 16
 healthPort: 8080
+logLevel: info
 blob:
   endpoint: localhost:9000
   accessKeyID: minioadmin
@@ -81,9 +94,13 @@ blob:
   useSSL: false
   deleteMarkerCleanupDelayDays: 1
   nonCurrentVersionCleanupDelayDays: 1
+  blobOperationTimeout: 30s
 nats:
   url: nats://localhost:4222
   subjectPrefix: nimbus
+  natsDrainTimeout: 30s
+db:
+  channelBufferSize: 256
 ```
 
 ### Configuration Loading Order
@@ -106,13 +123,12 @@ Program Arguments are specified via command-line flags. Each flag has a long for
 
 ### Program Arguments Parameters
 
-| Parameter    | Type     | Long Flag     | Short Flag | Default       | Description                                 | Valid Values                                                                   |
-| ------------ | -------- | ------------- | ---------- | ------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
-| `Mode`       | `string` | `--mode`      | `-m`       | `single`      | Operation mode of the node                  | `single`, `distributed` (case-insensitive)                                     |
-| `ConfigPath` | `string` | `--config`    | `-c`       | `.config.yml` | Path to the cluster configuration YAML file | Any valid file path                                                            |
-| `LogLevel`   | `string` | `--log-level` | `-l`       | `info`        | Logging verbosity level                     | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic` (case-insensitive) |
-| `Help`       | `bool`   | `--help`      | `-h`       | `false`       | Display help message and exit               | Boolean flag (no value)                                                        |
-| `Version`    | `bool`   | `--version`   | `-v`       | `false`       | Display version information and exit        | Boolean flag (no value)                                                        |
+| Parameter    | Type     | Long Flag   | Short Flag | Default       | Description                                 | Valid Values                               |
+| ------------ | -------- | ----------- | ---------- | ------------- | ------------------------------------------- | ------------------------------------------ |
+| `Mode`       | `string` | `--mode`    | `-m`       | `single`      | Operation mode of the node                  | `single`, `distributed` (case-insensitive) |
+| `ConfigPath` | `string` | `--config`  | `-c`       | `.config.yml` | Path to the cluster configuration YAML file | Any valid file path                        |
+| `Help`       | `bool`   | `--help`    | `-h`       | `false`       | Display help message and exit               | Boolean flag (no value)                    |
+| `Version`    | `bool`   | `--version` | `-v`       | `false`       | Display version information and exit        | Boolean flag (no value)                    |
 
 ### Operation Modes
 
@@ -121,29 +137,17 @@ Program Arguments are specified via command-line flags. Each flag has a long for
 | `single`      | Single-node operation mode. The node operates independently without cluster coordination.        |
 | `distributed` | Distributed operation mode. The node participates in a cluster and coordinates with other nodes. |
 
-### Log Levels
-
-| Level   | Description                                             |
-| ------- | ------------------------------------------------------- |
-| `trace` | Most verbose level, includes all trace information      |
-| `debug` | Debug information for troubleshooting                   |
-| `info`  | General informational messages (default)                |
-| `warn`  | Warning messages for potentially problematic situations |
-| `error` | Error messages for error conditions                     |
-| `fatal` | Fatal errors that cause the application to exit         |
-| `panic` | Panic-level errors that cause the application to panic  |
-
 ### Example Usage
 
 ```bash
 # Run in single mode with default config
 ./nimbusdb
 
-# Run in distributed mode with custom config and debug logging
-./nimbusdb --mode distributed --config /path/to/config.yml --log-level debug
+# Run in distributed mode with custom config
+./nimbusdb --mode distributed --config /path/to/config.yml
 
 # Using short flags
-./nimbusdb -m distributed -c /path/to/config.yml -l debug
+./nimbusdb -m distributed -c /path/to/config.yml
 
 # Display help
 ./nimbusdb --help
@@ -157,7 +161,6 @@ Program Arguments are specified via command-line flags. Each flag has a long for
 All Program Arguments are validated:
 
 - Mode must be one of the valid operation modes
-- LogLevel must be one of the valid log levels
 - Validation is case-insensitive (values are normalized to lowercase)
 - Invalid values result in an error and the application exits
 

@@ -6,11 +6,11 @@
 shardCount: 16
 logLevel: "debug"
 nats:
-  url: tls://nats.ccnp.cloops.in:4222
+  url: "{NATS_URL}"
   creds: "{NATS_CREDS}"
   subjectPrefix: "nimbus"
 blob:
-  endpoint: "minio-test.servers.cloops.in:9000"
+  endpoint: "{BLOB_ENDPOINT}"
   accessKeyID: "admin"
   secretAccessKey: "{BLOB_SECRET_ACCESS_KEY}"
   useSSL: false

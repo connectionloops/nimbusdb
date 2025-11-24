@@ -114,7 +114,7 @@ func main() {
 
 // connectNATS establishes a connection to the NATS server using the provided configuration.
 // Configures production-ready connection options including reconnect handling and error callbacks.
-//
+// Reconnection is handled by NATS client automatically.
 // params:
 //   - cfg: The application configuration containing NATS connection settings
 //
