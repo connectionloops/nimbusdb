@@ -391,3 +391,109 @@ nats:
 		})
 	}
 }
+
+func TestLoad_LogLevelValidation(t *testing.T) {
+	// Test that LogLevel validation works correctly
+	testCases := []struct {
+		name     string
+		logLevel string
+		wantErr  bool
+	}{
+		{"valid trace", "trace", false},
+		{"valid debug", "debug", false},
+		{"valid info", "info", false},
+		{"valid warn", "warn", false},
+		{"valid error", "error", false},
+		{"valid fatal", "fatal", false},
+		{"valid panic", "panic", false},
+		{"valid uppercase", "INFO", false},
+		{"valid mixed case", "DeBuG", false},
+		{"valid with spaces", " info ", false},
+		{"invalid level", "invalid", true},
+		{"invalid number", "123", true},
+		{"invalid special chars", "info!", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			yamlFile := filepath.Join(tmpDir, "test_config.yml")
+			yamlContent := `shardCount: 5
+logLevel: "` + tc.logLevel + `"`
+			if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+				t.Fatalf("Failed to create test YAML file: %v", err)
+			}
+
+			// Clear any existing env vars
+			os.Unsetenv("LOG_LEVEL")
+			defer os.Unsetenv("LOG_LEVEL")
+
+			// Load config
+			cfg, err := Load(yamlFile)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("Load() should have failed with log level '%s', but didn't", tc.logLevel)
+				}
+				if cfg != nil {
+					t.Error("Load() should return nil config on error")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Load() should have succeeded with log level '%s', but failed: %v", tc.logLevel, err)
+				}
+				if cfg == nil {
+					t.Fatal("Load() should return a config")
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_LogLevelFromEnv(t *testing.T) {
+	// Test that LogLevel from environment variable is validated
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Set invalid log level via env var
+	os.Setenv("LOG_LEVEL", "invalid_level")
+	defer os.Unsetenv("LOG_LEVEL")
+
+	// Load config should fail
+	cfg, err := Load(yamlFile)
+	if err == nil {
+		t.Error("Load() should have failed with invalid log level from env var, but didn't")
+	}
+	if cfg != nil {
+		t.Error("Load() should return nil config on error")
+	}
+}
+
+func TestLoad_LogLevelDefault(t *testing.T) {
+	// Test that LogLevel defaults to "info" when not provided
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Clear any existing env vars
+	os.Unsetenv("LOG_LEVEL")
+	defer os.Unsetenv("LOG_LEVEL")
+
+	// Load config
+	cfg, err := Load(yamlFile)
+	if err != nil {
+		t.Fatalf("Load() should succeed with default log level, got error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("Load() should return a config")
+	}
+	if cfg.LogLevel != DefaultLogLevel {
+		t.Errorf("Expected LogLevel to default to %s, got %s", DefaultLogLevel, cfg.LogLevel)
+	}
+}
