@@ -19,6 +19,8 @@ const (
 	ErrorCodeBadRequest = 400
 	// ErrorCodeInternalServerError represents a server error (500)
 	ErrorCodeInternalServerError = 500
+	// ErrorCodeServiceUnavailable represents service unavailable (503)
+	ErrorCodeServiceUnavailable = 503
 
 	SuccessCode = 200
 )
@@ -143,6 +145,26 @@ func RespondWithNatsSuccess(msg *nats.Msg) {
 	b, _ := json.Marshal(resp)
 	msg.Respond(b)
 
+}
+
+// checkShutdownAndRespond checks if shutdown has been initiated and responds with an error if so.
+// This prevents new long-running blob operations from starting during graceful shutdown.
+//
+// params:
+//   - msg: The NATS message to respond to if shutdown is detected
+//
+// return:
+//   - bool: true if shutdown was detected (caller should return), false otherwise
+func checkShutdownAndRespond(msg *nats.Msg) bool {
+	select {
+	case <-globalShutdownCtx.Done():
+		// Shutdown initiated, reject new blob operations
+		RespondWithNatsError(msg, ErrorCodeServiceUnavailable, "server is shutting down")
+		return true
+	default:
+		// No shutdown signal, continue with operation
+		return false
+	}
 }
 
 // extractShardOperationHeaders extracts and validates required headers from a NATS message.

@@ -121,13 +121,8 @@ func handleShardOperation(shardID uint16, ch chan *nats.Msg) {
 //   - overwrite: If false, returns an error if the file already exists
 func handleWriteOperation(msg *nats.Msg, shardID uint16, fileName string, bucketName string, overwrite bool) {
 	// Check if shutdown has been initiated before starting blob operation
-	select {
-	case <-globalShutdownCtx.Done():
-		// Shutdown initiated, reject new blob operations
-		RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
+	if checkShutdownAndRespond(msg) {
 		return
-	default:
-		// No shutdown signal, continue with operation
 	}
 
 	// todo: metrics for write latency and count
@@ -171,13 +166,8 @@ func handleWriteOperation(msg *nats.Msg, shardID uint16, fileName string, bucket
 //   - bucketName: The bucket name where the file is stored
 func handleReadOperation(msg *nats.Msg, shardID uint16, fileName string, bucketName string) {
 	// Check if shutdown has been initiated before starting blob operation
-	select {
-	case <-globalShutdownCtx.Done():
-		// Shutdown initiated, reject new blob operations
-		RespondWithNatsError(msg, ErrorCodeInternalServerError, "server is shutting down")
+	if checkShutdownAndRespond(msg) {
 		return
-	default:
-		// No shutdown signal, continue with operation
 	}
 
 	// todo: metrics for read latency and count
