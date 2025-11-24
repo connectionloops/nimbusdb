@@ -341,7 +341,11 @@ func (m *mockMinioClient) StatObject(ctx context.Context, bucketName, objectName
 
 	if !exists {
 		// Return error that mimics MinIO's NoSuchKey error
-		return minio.ObjectInfo{}, fmt.Errorf("The specified key does not exist")
+		return minio.ObjectInfo{}, minio.ErrorResponse{
+			Code:       "NoSuchKey",
+			BucketName: bucketName,
+			Key:        objectName,
+		}
 	}
 
 	return minio.ObjectInfo{
