@@ -144,7 +144,7 @@ func drainNats(nc *nats.Conn, subscriptions []*nats.Subscription, shardHandlers 
 
 	// Wait briefly for any in-flight messages to be processed
 	log.Info().Msg("Waiting for in-flight messages to complete...")
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(cfg.NATS.ShutdownGracePeriod)
 
 	// Now it's safe to close all shard handler channels
 	log.Info().Msg("Closing shard handler channels...")

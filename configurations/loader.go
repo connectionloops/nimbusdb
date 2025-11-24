@@ -116,6 +116,9 @@ func Load(path string) (*Config, error) {
 	if cfg.NATS.NatsDrainTimeout == 0 {
 		cfg.NATS.NatsDrainTimeout = DefaultNATSDrainTimeout
 	}
+	if cfg.NATS.ShutdownGracePeriod == 0 {
+		cfg.NATS.ShutdownGracePeriod = DefaultNATSShutdownGracePeriod
+	}
 	if cfg.Blob.BlobOperationTimeout == 0 {
 		cfg.Blob.BlobOperationTimeout = DefaultBlobOperationTimeout
 	}
