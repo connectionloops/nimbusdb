@@ -11,7 +11,7 @@ Nimbus uses NATS to accept read, write and other requests
 **Description**:
 
 - Clients are expected to be shard aware
-- Meaning clients calculate shard id from partition key, using formula - hash(paritionKey) mod shardCount.
+- Meaning clients calculate shard id from partition key, using formula - hash(partitionKey) mod shardCount.
 - For this shard aware behaviour clients need to know shard count.
 
 > Clients are expected to cache this value to avoid repeated requests.
@@ -23,7 +23,7 @@ nats req nimbus.config.getShardCount
 **Server side implementation Notes**
 
 - All available data nodes are listening for request on this subject line through a common queue group called "common_config_qg".
-- Data nodes use channel
+- Data nodes use normal goroutine callback based subscription.
 
 ### 0. Save an object (point write)
 
@@ -54,7 +54,7 @@ nats req \
   "some-random-data"
 ```
 
-> Please note: In reality the nats message is byte[] corrosponding to msgpack data that client will send.
+> Please note: In reality the nats message is byte[] corresponding to msgpack data that client will send.
 
 **Server side implementation Notes**
 

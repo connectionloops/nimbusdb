@@ -136,6 +136,13 @@ To verify dependencies are correct:
 go mod verify
 ```
 
+### Configuration & Secrets
+
+- A sample configuration file is given `.config.yml`
+- However secrets are recommended to be injected by a secret manager
+- If you are a Connection Loops employee then doppler file is already added for you. just run `doppler setup` to set it up.
+- To run the project with secrets being injected from doppler, run `doppler run -- go run .`
+
 ### Build the Project
 
 ```bash
@@ -155,6 +162,8 @@ Or if you've built it:
 ```bash
 ./NimbusDb
 ```
+
+> Please make sure to supply the needed secrets see Configuration & Secrets section above.
 
 ## Running Tests
 
