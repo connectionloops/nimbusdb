@@ -1,1 +1,15 @@
 shardCount: 16
+logLevel: "debug"
+nats:
+  url: tls://nats.ccnp.cloops.in:4222
+  creds: "{NATS_CREDS}"
+  subjectPrefix: "nimbus"
+blob:
+  endpoint: "minio-test.servers.cloops.in:9000"
+  accessKeyID: "admin"
+  secretAccessKey: "{BLOB_SECRET_ACCESS_KEY}"
+  useSSL: false
+  deleteMarkerCleanupDelayDays: 1
+  nonCurrentVersionCleanupDelayDays: 1
+db:
+  channelBufferSize: 256

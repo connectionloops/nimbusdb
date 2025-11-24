@@ -1,7 +1,9 @@
 package main
 
 import (
+	"NimbusDb/blob"
 	"NimbusDb/configurations"
+	"NimbusDb/db"
 	"NimbusDb/health"
 	"NimbusDb/version"
 	"context"
@@ -10,7 +12,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -39,33 +43,51 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Setup logger with the specified log level
-	configurations.SetupLoggerWithLevel(args.GetLogLevel())
-
 	log.Info().Msgf("Starting %s in %s mode...", configurations.AppName, args.GetMode())
 
 	// Load configuration
-	configPath := args.ConfigPath
-	if configPath == "" {
-		configPath = configurations.DefaultConfigPath
+	cfg := configurations.MustLoad(args.ConfigPath)
+
+	// Setup logger with the specified log level
+	configurations.SetupLoggerWithLevel(cfg.LogLevel)
+
+	// setup NATS client
+	nc := connectNATS(cfg)
+
+	// setup blob client
+	ctx := context.Background()
+	blobClient, err := blob.NewClient(ctx, cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create blob client")
 	}
 
-	cfg, err := configurations.Load(configPath)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load configuration")
+	db.InitializeGlobals(cfg, nc, blobClient)
+	systemSubscriptions := db.StartSystemHandlers()
+
+	var shardHandlers []*db.ShardHandlerInfo
+
+	switch args.GetMode() {
+	case configurations.ModeSingle:
+		db.InitializeSingleModeState()
+		shardHandlers = db.StartShardHandlers()
+	case configurations.ModeDistributed:
+		log.Fatal().Msg("Distributed mode is not supported yet")
+	default:
+		log.Fatal().Msgf("Invalid mode: %s", args.GetMode())
 	}
-	if args.Mode == configurations.ModeSingle {
-		log.Info().Msgf("%s is running in single mode", configurations.AppName)
-	} else if args.Mode == configurations.ModeDistributed {
-		log.Info().Msgf("%s is running in distributed mode", configurations.AppName)
+
+	// Collect all subscriptions for graceful shutdown
+	subscriptions := make([]*nats.Subscription, 0, len(systemSubscriptions)+len(shardHandlers))
+	subscriptions = append(subscriptions, systemSubscriptions...)
+	for _, handler := range shardHandlers {
+		subscriptions = append(subscriptions, handler.Subscription)
 	}
 
 	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	shutdownCtx, cancel := context.WithCancel(context.Background())
 
 	// Start health check server (port is set in config, defaults to 8080)
-	health.StartHealthServer(ctx, cfg.HealthPort)
+	health.StartHealthServer(shutdownCtx, cfg.HealthPort)
 
 	// Mark application as ready after initialization
 	health.SetReady(true)
@@ -77,6 +99,72 @@ func main() {
 
 	<-sigChan
 	log.Info().Msg("Shutting down...")
+
+	// Mark as not ready to stop accepting new requests
 	health.SetReady(false)
+
+	// Cancel context to trigger health server shutdown
 	cancel()
+
+	// Drain NATS connection and unsubscribe from all subscriptions
+	drainNats(nc, subscriptions, shardHandlers, cfg)
+
+	log.Info().Msg("Graceful shutdown complete. bye bye!")
+}
+
+// connectNATS establishes a connection to the NATS server using the provided configuration.
+// Configures production-ready connection options including reconnect handling and error callbacks.
+//
+// params:
+//   - cfg: The application configuration containing NATS connection settings
+//
+// return:
+//   - *nats.Conn: The established NATS connection
+func connectNATS(cfg *configurations.Config) *nats.Conn {
+	nc, err := nats.Connect(
+		cfg.NATS.URL,
+		nats.UserCredentialBytes([]byte(cfg.NATS.Creds)),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to connect to NATS")
+	}
+	return nc
+}
+
+// drainNats gracefully shuts down NATS by closing channels, unsubscribing from all subscriptions,
+// and then draining the connection with a timeout.
+func drainNats(nc *nats.Conn, subscriptions []*nats.Subscription, shardHandlers []*db.ShardHandlerInfo, cfg *configurations.Config) {
+	// Close all shard handler channels first to stop processing new messages
+	log.Info().Msg("Closing shard handler channels...")
+	for _, handler := range shardHandlers {
+		close(handler.Channel)
+	}
+
+	// Unsubscribe from all NATS subscriptions before draining
+	log.Info().Msg("Unsubscribing from NATS subjects...")
+	for _, sub := range subscriptions {
+		if err := sub.Unsubscribe(); err != nil {
+			log.Error().Err(err).Msg("Failed to unsubscribe from NATS subject")
+		}
+	}
+
+	// Drain the NATS connection to allow in-flight messages to complete
+	// Use a timeout to prevent hanging indefinitely
+	log.Info().Msg("Draining NATS connection...")
+	drainDone := make(chan error, 1)
+	go func() {
+		drainDone <- nc.Drain()
+	}()
+
+	select {
+	case err := <-drainDone:
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to drain NATS connection")
+		} else {
+			log.Info().Msg("NATS connection drained successfully")
+		}
+	case <-time.After(cfg.NATS.NatsDrainTimeout):
+		log.Warn().Dur("timeout", cfg.NATS.NatsDrainTimeout).Msg("NATS drain operation timed out, closing connection")
+		nc.Close()
+	}
 }

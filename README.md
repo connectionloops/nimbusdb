@@ -35,4 +35,13 @@ See [API Doc](/devdocs/api.md)
 ## Development
 
 - For running the project locally, see [Local Setup](/devdocs/local_setup.md)
-- For coding standards and style guidelines, see the [Style Guide](/devdocs/style_guide.md).
+- If you are interested in contributing, coding standards and style guidelines, see the [Contribution Guide](/devdocs/style_guide.md).
+- For Nimbus architecture, please see [Architecture & Dev Docs](/devdocs/README.md)
+
+## Credits
+
+🏗️ Architected by Gaurav Kalele, <br />
+💫 Vibe coded with Cursor <br />
+👮 Thoroughly Reviewd by: Gaurav (Human), Cursor (self review), Copilot (PR Review)
+
+© Connection Loops

@@ -194,3 +194,27 @@ func (c *Client) applyLifecycleRules(ctx context.Context, bucketName string) err
 
 	return c.minioClient.SetBucketLifecycle(ctx, bucketName, lifecycleConfig)
 }
+
+// FileExists checks if a file exists in the specified bucket.
+// Returns true if the file exists, false if it doesn't exist, and an error if the check fails.
+//
+// params:
+//   - ctx: Context for the operation
+//   - bucketName: The name of the bucket to check
+//   - fileName: The name of the file to check
+//
+// return:
+//   - bool: True if the file exists, false otherwise
+//   - error: An error if the check fails (e.g., bucket doesn't exist, connection error)
+func (c *Client) FileExists(ctx context.Context, bucketName, fileName string) (bool, error) {
+	_, err := c.minioClient.StatObject(ctx, bucketName, fileName, minio.StatObjectOptions{})
+	if err != nil {
+		// Check if error is because object doesn't exist
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to stat object %s: %w", fileName, err)
+	}
+
+	return true, nil
+}

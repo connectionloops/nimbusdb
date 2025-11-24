@@ -10,13 +10,17 @@ func TestLoad_FromYAML(t *testing.T) {
 	// Create a temporary YAML file
 	tmpDir := t.TempDir()
 	yamlFile := filepath.Join(tmpDir, "test_config.yml")
-	yamlContent := `shardCount: 5`
+	yamlContent := `shardCount: 5
+nats:
+  url: nats://localhost:4222`
 	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
-	// Clear any existing env var
+	// Clear any existing env vars
 	os.Unsetenv("SHARD_COUNT")
+	os.Unsetenv("NATS_URL")
+	defer os.Unsetenv("NATS_URL")
 
 	// Load config
 	cfg, err := Load(yamlFile)
@@ -26,6 +30,11 @@ func TestLoad_FromYAML(t *testing.T) {
 
 	if cfg.ShardCount != 5 {
 		t.Errorf("Expected ShardCount to be 5, got %d", cfg.ShardCount)
+	}
+
+	// Verify NATS URL is loaded from YAML
+	if cfg.NATS.URL != "nats://localhost:4222" {
+		t.Errorf("Expected NATS URL to be 'nats://localhost:4222', got %s", cfg.NATS.URL)
 	}
 }
 
@@ -88,7 +97,7 @@ func TestLoad_EmptyPath(t *testing.T) {
 		t.Fatal("Load() returned nil config")
 	}
 
-	// Should have zero value
+	// Should have zero value for ShardCount
 	if cfg.ShardCount != 0 {
 		t.Errorf("Expected ShardCount to be 0 (zero value), got %d", cfg.ShardCount)
 	}
@@ -201,5 +210,184 @@ func TestBuildEnvToKoanfMap(t *testing.T) {
 		t.Error("SHARD_COUNT should be in the env map")
 	} else if koanfKey != expectedKey {
 		t.Errorf("Expected SHARD_COUNT to map to %s, got %s", expectedKey, koanfKey)
+	}
+
+	// Check that NATS_URL maps to nats.url
+	expectedNATSKey := "nats.url"
+	if koanfKey, ok := envMap["NATS_URL"]; !ok {
+		t.Error("NATS_URL should be in the env map")
+	} else if koanfKey != expectedNATSKey {
+		t.Errorf("Expected NATS_URL to map to %s, got %s", expectedNATSKey, koanfKey)
+	}
+}
+
+func TestLoad_NATSDefaults(t *testing.T) {
+	// Test that both NATS URL and SubjectPrefix default when not provided
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Clear any existing env vars
+	os.Unsetenv("NATS_URL")
+	os.Unsetenv("NATS_SUBJECT_PREFIX")
+	defer os.Unsetenv("NATS_URL")
+	defer os.Unsetenv("NATS_SUBJECT_PREFIX")
+
+	// Load config
+	cfg, err := Load(yamlFile)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	// NATS URL should default to "nats://localhost:4222"
+	if cfg.NATS.URL != DefaultNATSURL {
+		t.Errorf("Expected NATS URL to be %s, got %s", DefaultNATSURL, cfg.NATS.URL)
+	}
+
+	// SubjectPrefix should default to "nimbus"
+	if cfg.NATS.SubjectPrefix != DefaultNATSSubjectPrefix {
+		t.Errorf("Expected SubjectPrefix to be %s, got %s", DefaultNATSSubjectPrefix, cfg.NATS.SubjectPrefix)
+	}
+}
+
+func TestLoad_NATSSubjectPrefixFromYAML(t *testing.T) {
+	// Test that SubjectPrefix can be set via YAML file
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5
+nats:
+  subjectPrefix: custom-prefix`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Clear any existing env vars
+	os.Unsetenv("NATS_SUBJECT_PREFIX")
+	defer os.Unsetenv("NATS_SUBJECT_PREFIX")
+
+	// Load config
+	cfg, err := Load(yamlFile)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	// SubjectPrefix should be from YAML
+	if cfg.NATS.SubjectPrefix != "custom-prefix" {
+		t.Errorf("Expected SubjectPrefix to be 'custom-prefix', got %s", cfg.NATS.SubjectPrefix)
+	}
+
+	// NATS URL should default
+	if cfg.NATS.URL != DefaultNATSURL {
+		t.Errorf("Expected NATS URL to default to %s, got %s", DefaultNATSURL, cfg.NATS.URL)
+	}
+}
+
+func TestLoad_NATSUrlDefault(t *testing.T) {
+	// Test that NATS URL defaults to localhost:4222 when not provided
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Clear any existing env vars
+	os.Unsetenv("NATS_URL")
+	os.Unsetenv("NATS_SUBJECT_PREFIX")
+	defer os.Unsetenv("NATS_URL")
+	defer os.Unsetenv("NATS_SUBJECT_PREFIX")
+
+	// Load config should succeed with default URL
+	cfg, err := Load(yamlFile)
+	if err != nil {
+		t.Fatalf("Load() should succeed with default NATS URL, got error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("Load() should return a config")
+	}
+	if cfg.NATS.URL != DefaultNATSURL {
+		t.Errorf("Expected NATS URL to default to %s, got %s", DefaultNATSURL, cfg.NATS.URL)
+	}
+}
+
+func TestLoad_NATSSubjectPrefixInvalidCharacters(t *testing.T) {
+	// Test that SubjectPrefix with invalid characters fails validation
+	tmpDir := t.TempDir()
+	yamlFile := filepath.Join(tmpDir, "test_config.yml")
+	yamlContent := `shardCount: 5
+nats:
+  subjectPrefix: "invalid prefix with spaces"`
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("Failed to create test YAML file: %v", err)
+	}
+
+	// Clear any existing env vars
+	os.Unsetenv("NATS_SUBJECT_PREFIX")
+	defer os.Unsetenv("NATS_SUBJECT_PREFIX")
+
+	// Load config should fail because SubjectPrefix contains spaces
+	cfg, err := Load(yamlFile)
+	if err == nil {
+		t.Error("Load() should have failed with invalid SubjectPrefix, but didn't")
+	}
+	if cfg != nil {
+		t.Error("Load() should return nil config on error")
+	}
+}
+
+func TestLoad_NATSSubjectPrefixValidCharacters(t *testing.T) {
+	// Test that SubjectPrefix with valid characters works
+	testCases := []struct {
+		name    string
+		prefix  string
+		wantErr bool
+	}{
+		{"alphanumeric", "nimbus123", false},
+		{"with dots", "nimbus.db", false},
+		{"with underscores", "nimbus_db", false},
+		{"with dashes", "nimbus-db", false},
+		{"with colons", "nimbus:db", false},
+		{"mixed valid", "nimbus.db_v1-test:prod", false},
+		{"with spaces", "nimbus db", true},
+		{"with special chars", "nimbus@db", true},
+		{"with slashes", "nimbus/db", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			yamlFile := filepath.Join(tmpDir, "test_config.yml")
+			yamlContent := `shardCount: 5
+nats:
+  subjectPrefix: "` + tc.prefix + `"`
+			if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+				t.Fatalf("Failed to create test YAML file: %v", err)
+			}
+
+			// Clear any existing env vars
+			os.Unsetenv("NATS_SUBJECT_PREFIX")
+			defer os.Unsetenv("NATS_SUBJECT_PREFIX")
+
+			// Load config
+			cfg, err := Load(yamlFile)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("Load() should have failed with prefix '%s', but didn't", tc.prefix)
+				}
+				if cfg != nil {
+					t.Error("Load() should return nil config on error")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Load() should have succeeded with prefix '%s', but failed: %v", tc.prefix, err)
+				}
+				if cfg != nil && cfg.NATS.SubjectPrefix != tc.prefix {
+					t.Errorf("Expected SubjectPrefix to be '%s', got '%s'", tc.prefix, cfg.NATS.SubjectPrefix)
+				}
+			}
+		})
 	}
 }

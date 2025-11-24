@@ -8,6 +8,8 @@ import (
 )
 
 // ProgramArguments holds all command-line arguments for the application.
+// This typically control runtime behavior of the application.
+// These values are specific to each node in NimbusDb cluster.
 type ProgramArguments struct {
 	// Mode specifies the operation mode of the application.
 	// Valid values: "single", "distributed"
@@ -16,10 +18,6 @@ type ProgramArguments struct {
 	// ConfigPath specifies the path to the configuration YAML file.
 	// Defaults to ".config.yml" if not specified.
 	ConfigPath string
-
-	// LogLevel specifies the logging level.
-	// Valid values: "trace", "debug", "info", "warn", "error", "fatal", "panic"
-	LogLevel string
 
 	// Help displays the help message and exits.
 	Help bool
@@ -38,16 +36,12 @@ const (
 	// DefaultMode is the default operation mode
 	DefaultMode = ModeSingle
 
-	// DefaultLogLevel is the default logging level
-	DefaultLogLevel = "info"
-
 	// DefaultConfigPath is the default configuration file path
 	DefaultConfigPath = ".config.yml"
 )
 
 var (
-	validModes     = []string{ModeSingle, ModeDistributed}
-	validLogLevels = []string{"trace", "debug", "info", "warn", "error", "fatal", "panic"}
+	validModes = []string{ModeSingle, ModeDistributed}
 )
 
 // ParseArguments parses command-line arguments and returns a ProgramArguments struct.
@@ -69,8 +63,6 @@ func ParseArguments(args []string) (*ProgramArguments, error) {
 	fs.StringVar(&parsedArgs.Mode, "m", DefaultMode, "Shorthand for -mode")
 	fs.StringVar(&parsedArgs.ConfigPath, "config", DefaultConfigPath, fmt.Sprintf("Path to configuration YAML file (default: %s)", DefaultConfigPath))
 	fs.StringVar(&parsedArgs.ConfigPath, "c", DefaultConfigPath, "Shorthand for -config")
-	fs.StringVar(&parsedArgs.LogLevel, "log-level", DefaultLogLevel, fmt.Sprintf("Logging level: %s", strings.Join(validLogLevels, ", ")))
-	fs.StringVar(&parsedArgs.LogLevel, "l", DefaultLogLevel, "Shorthand for -log-level")
 	fs.BoolVar(&parsedArgs.Help, "help", false, "Display help message")
 	fs.BoolVar(&parsedArgs.Help, "h", false, "Shorthand for -help")
 	fs.BoolVar(&parsedArgs.Version, "version", false, "Display version information")
@@ -111,11 +103,6 @@ func (pa *ProgramArguments) Validate() error {
 		validationErrors = append(validationErrors, fmt.Sprintf("invalid mode '%s': must be one of %s", pa.Mode, strings.Join(validModes, ", ")))
 	}
 
-	// Validate log level
-	if !isValidValue(pa.LogLevel, validLogLevels) {
-		validationErrors = append(validationErrors, fmt.Sprintf("invalid log level '%s': must be one of %s", pa.LogLevel, strings.Join(validLogLevels, ", ")))
-	}
-
 	if len(validationErrors) > 0 {
 		return errors.New(strings.Join(validationErrors, "; "))
 	}
@@ -147,12 +134,4 @@ func isValidValue(value string, validValues []string) bool {
 //   - string: The normalized mode value.
 func (pa *ProgramArguments) GetMode() string {
 	return strings.ToLower(strings.TrimSpace(pa.Mode))
-}
-
-// GetLogLevel returns the normalized log level value (lowercase, trimmed).
-//
-// return:
-//   - string: The normalized log level value.
-func (pa *ProgramArguments) GetLogLevel() string {
-	return strings.ToLower(strings.TrimSpace(pa.LogLevel))
 }

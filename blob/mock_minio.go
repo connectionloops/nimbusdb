@@ -303,6 +303,54 @@ func (m *mockMinioClient) SetBucketLifecycle(ctx context.Context, bucketName str
 	return nil
 }
 
+// StatObject retrieves object metadata without reading the object.
+func (m *mockMinioClient) StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Check if bucket exists
+	if !m.buckets[bucketName] {
+		return minio.ObjectInfo{}, fmt.Errorf("bucket %s does not exist", bucketName)
+	}
+
+	// Check if object exists
+	var exists bool
+	var size int64
+	var versionID string
+
+	if m.versioning[bucketName] && m.latestVersions[bucketName] != nil {
+		// For versioned buckets, check if there's a latest version
+		if latestVersion, hasLatest := m.latestVersions[bucketName][objectName]; hasLatest {
+			if m.objectVersions[bucketName] != nil && m.objectVersions[bucketName][objectName] != nil {
+				if data, found := m.objectVersions[bucketName][objectName][latestVersion]; found {
+					exists = true
+					size = int64(len(data))
+					versionID = latestVersion
+				}
+			}
+		}
+	} else {
+		// For non-versioned buckets, check objects map
+		if bucket, bucketExists := m.objects[bucketName]; bucketExists {
+			if data, found := bucket[objectName]; found {
+				exists = true
+				size = int64(len(data))
+			}
+		}
+	}
+
+	if !exists {
+		// Return error that mimics MinIO's NoSuchKey error
+		return minio.ObjectInfo{}, fmt.Errorf("The specified key does not exist")
+	}
+
+	return minio.ObjectInfo{
+		Key:       objectName,
+		Size:      size,
+		VersionID: versionID,
+	}, nil
+}
+
 // Helper methods for test setup
 
 // setListBucketsError sets an error to return from ListBuckets.
