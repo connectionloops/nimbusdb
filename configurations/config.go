@@ -19,10 +19,11 @@ type Config struct {
 
 // NATSConfig holds the configuration for NATS.
 type NATSConfig struct {
-	URL              string        `koanf:"url" env:"NATS_URL"`
-	Creds            string        `koanf:"creds" env:"NATS_CREDS"`
-	SubjectPrefix    string        `koanf:"subjectPrefix" env:"NATS_SUBJECT_PREFIX"`
-	NatsDrainTimeout time.Duration `koanf:"natsDrainTimeout" env:"NATS_DRAIN_TIMEOUT"` // timeout for NATS drain operation, default 30s
+	URL                    string        `koanf:"url" env:"NATS_URL"`
+	Creds                  string        `koanf:"creds" env:"NATS_CREDS"`
+	SubjectPrefix          string        `koanf:"subjectPrefix" env:"NATS_SUBJECT_PREFIX"`
+	NatsDrainTimeout       time.Duration `koanf:"natsDrainTimeout" env:"NATS_DRAIN_TIMEOUT"`             // timeout for NATS drain operation, default 30s
+	ShutdownGracePeriod    time.Duration `koanf:"shutdownGracePeriod" env:"NATS_SHUTDOWN_GRACE_PERIOD"` // grace period to wait for in-flight messages during shutdown, default 100ms
 }
 
 // BlobConfig holds the configuration for MinIO blob storage.
