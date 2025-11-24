@@ -162,6 +162,11 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("non-current version cleanup delay days must be between 1 and %d, got %d", maxLifecycleDays, cfg.Blob.NonCurrentVersionCleanupDelayDays)
 	}
 
+	// Validate log level
+	if err := validateLogLevel(cfg.LogLevel); err != nil {
+		return err
+	}
+
 	// Validate NATS configuration
 	if err := validateNATSConfig(&cfg.NATS); err != nil {
 		return err
@@ -184,6 +189,28 @@ func MustLoad(path string) *Config {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 	return cfg
+}
+
+// validateLogLevel validates that the log level is one of the valid values.
+func validateLogLevel(level string) error {
+	validLevels := []string{
+		LogLevelTrace,
+		LogLevelDebug,
+		LogLevelInfo,
+		LogLevelWarn,
+		LogLevelError,
+		LogLevelFatal,
+		LogLevelPanic,
+	}
+
+	levelLower := strings.ToLower(strings.TrimSpace(level))
+	for _, valid := range validLevels {
+		if levelLower == valid {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid log level '%s': must be one of %s", level, strings.Join(validLevels, ", "))
 }
 
 // validateNATSConfig validates the NATS configuration values.
